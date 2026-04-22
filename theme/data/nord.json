@@ -1,0 +1,42 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "nord",
+  "description": "Nord palette for dark terminals (Polar Night background, Snow Storm foreground, Frost + Aurora accents). Uses upstream chroma \"nord\". The glamour field is intentionally omitted because charm.land/glamour does not yet ship a Nord preset; the framework's capability-aware default is used until a Nord StyleConfig lands upstream.",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "nord0":  "#2E3440",
+        "nord1":  "#3B4252",
+        "nord2":  "#434C5E",
+        "nord3":  "#4C566A",
+        "nord4":  "#D8DEE9",
+        "nord5":  "#E5E9F0",
+        "nord6":  "#ECEFF4",
+        "nord7":  "#8FBCBB",
+        "nord8":  "#88C0D0",
+        "link":   "#88C0D0",
+        "nord9":  "#81A1C1",
+        "nord10": "#5E81AC",
+        "nord11": "#BF616A",
+        "nord12": "#D08770",
+        "nord13": "#EBCB8B",
+        "nord14": "#A3BE8C",
+        "nord15": "#B48EAD"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "nord14", "bold": true },
+        "status.warning": { "$primitive": "nord13", "bold": true },
+        "status.error":   { "$primitive": "nord11", "bold": true },
+        "status.info":    { "$primitive": "nord8",  "bold": true },
+        "text.primary":   { "$primitive": "nord6" },
+        "text.secondary": { "$primitive": "nord4" },
+        "text.muted":     { "$primitive": "nord3" },
+        "text.title":     { "$primitive": "nord10", "bold": true },
+        "text.link":      { "$primitive": "link",   "underline": true },
+        "accent.primary": { "$primitive": "nord15", "bold": true },
+        "code.surface":   { "$primitive": "nord0" }
+      },
+      "chroma": "nord"
+    }
+  }
+}

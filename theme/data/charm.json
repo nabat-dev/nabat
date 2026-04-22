@@ -1,0 +1,66 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "charm",
+  "description": "Charm Bracelet x/colors palette (github.com/charmbracelet/x/blob/main/colors/colors.go). Primitives use the same hex values as lipgloss.AdaptiveColor Light/Dark fields; pairs with the huh charm adapter.",
+  "default": "dark",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "primaryText":   "#dddddd",
+        "secondaryGray": "#626262",
+        "mutedGray":     "#777777",
+        "successGreen":  "#04B575",
+        "warnYellow":    "#9BA92F",
+        "errorPink":     "#ED567A",
+        "infoIndigo":    "#7571F9",
+        "linkIndigo":    "#7571F9",
+        "titleIndigo":   "#514DC1",
+        "accentFuschia": "#EE6FF8",
+        "codeBg":        "#222222"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "successGreen",  "bold": true },
+        "status.warning": { "$primitive": "warnYellow",    "bold": true },
+        "status.error":   { "$primitive": "errorPink",     "bold": true },
+        "status.info":    { "$primitive": "infoIndigo",    "bold": true },
+        "text.primary":   { "$primitive": "primaryText" },
+        "text.secondary": { "$primitive": "secondaryGray" },
+        "text.muted":     { "$primitive": "mutedGray" },
+        "text.title":     { "$primitive": "titleIndigo",   "bold": true },
+        "text.link":      { "$primitive": "linkIndigo",   "underline": true },
+        "accent.primary": { "$primitive": "accentFuschia", "bold": true },
+        "code.surface":   { "$primitive": "codeBg" }
+      },
+      "huh": "charm"
+    },
+    "light": {
+      "primitives": {
+        "primaryText":   "#1A1A1A",
+        "secondaryGray": "#909090",
+        "mutedGray":     "#A49FA5",
+        "successGreen":  "#04B575",
+        "warnYellow":    "#6BCB94",
+        "errorPink":     "#FF4672",
+        "infoIndigo":    "#5A56E0",
+        "linkIndigo":    "#5A56E0",
+        "titleIndigo":   "#7D79F6",
+        "accentFuschia": "#EE6FF8",
+        "codeBg":        "#DDDADA"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "successGreen",  "bold": true },
+        "status.warning": { "$primitive": "warnYellow",    "bold": true },
+        "status.error":   { "$primitive": "errorPink",     "bold": true },
+        "status.info":    { "$primitive": "infoIndigo",    "bold": true },
+        "text.primary":   { "$primitive": "primaryText" },
+        "text.secondary": { "$primitive": "secondaryGray" },
+        "text.muted":     { "$primitive": "mutedGray" },
+        "text.title":     { "$primitive": "titleIndigo",   "bold": true },
+        "text.link":      { "$primitive": "linkIndigo",   "underline": true },
+        "accent.primary": { "$primitive": "accentFuschia", "bold": true },
+        "code.surface":   { "$primitive": "codeBg" }
+      },
+      "huh": "charm"
+    }
+  }
+}

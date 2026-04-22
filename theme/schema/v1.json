@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nabat.dev/schemas/theme/v1.json",
+  "title": "Nabat Theme Manifest v1",
+  "description": "Schema for Nabat CLI theme manifests.",
+  "type": "object",
+  "required": [
+    "name",
+    "variants"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "default": {
+      "enum": ["dark", "light", "notty"]
+    },
+    "promptKnobs": {
+      "$ref": "#/$defs/promptKnobs"
+    },
+    "variants": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "dark":  { "$ref": "#/$defs/variant" },
+        "light": { "$ref": "#/$defs/variant" },
+        "notty": { "$ref": "#/$defs/variant" }
+      }
+    }
+  },
+  "$defs": {
+    "variant": {
+      "type": "object",
+      "required": ["primitives", "tokens"],
+      "additionalProperties": false,
+      "properties": {
+        "primitives": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$"
+          }
+        },
+        "tokens": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/styleSpec"
+          }
+        },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "chroma": {
+          "type": "string",
+          "minLength": 1
+        },
+        "glamour": {
+          "type": "string",
+          "minLength": 1
+        },
+        "huh": {
+          "enum": ["charm", "base16", "dracula", "catppuccin"]
+        }
+      }
+    },
+    "promptKnobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selectedPrefix": { "type": "string" },
+        "unselectedPrefix": { "type": "string" },
+        "border": { "$ref": "#/$defs/borderPreset" }
+      }
+    },
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "colorRef": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/hexColor"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["$primitive"],
+          "properties": {
+            "$primitive": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["$token"],
+          "properties": {
+            "$token": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "borderPreset": {
+      "enum": [
+        "hidden",
+        "normal",
+        "rounded",
+        "thick",
+        "double",
+        "block",
+        "outerHalfBlock",
+        "innerHalfBlock"
+      ]
+    },
+    "styleSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "$primitive": { "type": "string", "minLength": 1 },
+        "$token":     { "type": "string", "minLength": 1 },
+        "fg": { "$ref": "#/$defs/colorRef" },
+        "bg": { "$ref": "#/$defs/colorRef" },
+        "borderForeground": { "$ref": "#/$defs/colorRef" },
+        "borderBackground": { "$ref": "#/$defs/colorRef" },
+        "border": { "$ref": "#/$defs/borderPreset" },
+        "bold":          { "type": "boolean" },
+        "italic":        { "type": "boolean" },
+        "underline":     { "type": "boolean" },
+        "strikethrough": { "type": "boolean" },
+        "faint":         { "type": "boolean" },
+        "blink":         { "type": "boolean" },
+        "reverse":       { "type": "boolean" },
+        "text":          { "type": "string" }
+      },
+      "not": {
+        "required": ["$primitive", "$token"]
+      }
+    }
+  }
+}

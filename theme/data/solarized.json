@@ -1,0 +1,80 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "solarized",
+  "description": "Solarized sixteen-color palette (Ethan Schoonover). Canonical sRGB hex from https://ethanschoonover.com/solarized/ — dark uses base03 background with base0 body text; light uses base3 with base00 per usage notes. CLI token roles (headings/links/info vs accents) follow common Solarized usage summaries such as https://gist.github.com/mosioc/b9e28280df33ebdb42db2bd2abf9acb9. Chroma solarized-dark / solarized-light; glamour dark/light. Huh omitted so prompts follow Solarized tokens.",
+  "default": "dark",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "base03":   "#002b36",
+        "base02":   "#073642",
+        "base01":   "#586e75",
+        "base00":   "#657b83",
+        "base0":    "#839496",
+        "base1":    "#93a1a1",
+        "base2":    "#eee8d5",
+        "base3":    "#fdf6e3",
+        "yellow":   "#b58900",
+        "orange":   "#cb4b16",
+        "red":      "#dc322f",
+        "magenta":  "#d33682",
+        "violet":   "#6c71c4",
+        "link":     "#6c71c4",
+        "blue":     "#268bd2",
+        "cyan":     "#2aa198",
+        "green":    "#859900"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",    "bold": true },
+        "status.warning": { "$primitive": "yellow",   "bold": true },
+        "status.error":   { "$primitive": "red",      "bold": true },
+        "status.info":    { "$primitive": "blue",     "bold": true },
+        "text.primary":   { "$primitive": "base0" },
+        "text.secondary": { "$primitive": "base00" },
+        "text.muted":     { "$primitive": "base01" },
+        "text.title":     { "$primitive": "magenta",  "bold": true },
+        "text.link":      { "$primitive": "link",     "underline": true },
+        "accent.primary": { "$primitive": "cyan",     "bold": true },
+        "code.surface":   { "$primitive": "base02" }
+      },
+      "chroma":  "solarized-dark",
+      "glamour": "dark"
+    },
+    "light": {
+      "primitives": {
+        "base03":   "#002b36",
+        "base02":   "#073642",
+        "base01":   "#586e75",
+        "base00":   "#657b83",
+        "base0":    "#839496",
+        "base1":    "#93a1a1",
+        "base2":    "#eee8d5",
+        "base3":    "#fdf6e3",
+        "yellow":   "#b58900",
+        "orange":   "#cb4b16",
+        "red":      "#dc322f",
+        "magenta":  "#d33682",
+        "violet":   "#6c71c4",
+        "link":     "#6c71c4",
+        "blue":     "#268bd2",
+        "cyan":     "#2aa198",
+        "green":    "#859900"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",    "bold": true },
+        "status.warning": { "$primitive": "yellow",   "bold": true },
+        "status.error":   { "$primitive": "red",      "bold": true },
+        "status.info":    { "$primitive": "blue",     "bold": true },
+        "text.primary":   { "$primitive": "base00" },
+        "text.secondary": { "$primitive": "base0" },
+        "text.muted":     { "$primitive": "base01" },
+        "text.title":     { "$primitive": "magenta",  "bold": true },
+        "text.link":      { "$primitive": "link",     "underline": true },
+        "accent.primary": { "$primitive": "cyan",     "bold": true },
+        "code.surface":   { "$primitive": "base2" }
+      },
+      "chroma":  "solarized-light",
+      "glamour": "light"
+    }
+  }
+}

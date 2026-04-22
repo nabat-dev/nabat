@@ -1,0 +1,86 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "default",
+  "description": "Capability-aware default theme. Automatically selects dark, light, or plain-text rendering based on terminal detection.",
+  "default": "dark",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "successGreen": "#00D75F",
+        "warnYellow":   "#FFD700",
+        "errorRed":     "#FF5555",
+        "infoBlue":     "#00AFFF",
+        "linkBlue":     "#00AFFF",
+        "labelGray":    "#8A8A8A",
+        "valueWhite":   "#FFFFFF",
+        "titleBlue":    "#87AFFF",
+        "bodyGray":     "#D0D0D0",
+        "mutedGray":    "#8A8A8A",
+        "codeBg":       "#1E1E1E"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "successGreen", "bold": true },
+        "status.warning": { "$primitive": "warnYellow",   "bold": true },
+        "status.error":   { "$primitive": "errorRed",     "bold": true },
+        "status.info":    { "$primitive": "infoBlue",     "bold": true },
+        "text.primary":   { "$primitive": "valueWhite" },
+        "text.secondary": { "$primitive": "bodyGray" },
+        "text.muted":     { "$primitive": "mutedGray" },
+        "text.title":     { "$primitive": "titleBlue",    "bold": true },
+        "text.link":      { "$primitive": "linkBlue",     "underline": true },
+        "accent.primary": { "$primitive": "labelGray",    "bold": true },
+        "code.surface":   { "$primitive": "codeBg" }
+      },
+      "huh": "charm"
+    },
+    "light": {
+      "primitives": {
+        "successGreen":   "#1A7F37",
+        "warnOrange":     "#9A6700",
+        "errorRed":       "#CF222E",
+        "infoBlue":       "#0969DA",
+        "linkBlue":       "#0969DA",
+        "labelSlate":     "#57606A",
+        "valueNearBlack": "#24292F",
+        "titleBlue":      "#0550AE",
+        "bodyDark":       "#57606A",
+        "mutedGray":      "#8C959F",
+        "codeBg":         "#F6F8FA"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "successGreen",   "bold": true },
+        "status.warning": { "$primitive": "warnOrange",     "bold": true },
+        "status.error":   { "$primitive": "errorRed",       "bold": true },
+        "status.info":    { "$primitive": "infoBlue",       "bold": true },
+        "text.primary":   { "$primitive": "valueNearBlack" },
+        "text.secondary": { "$primitive": "bodyDark" },
+        "text.muted":     { "$primitive": "mutedGray" },
+        "text.title":     { "$primitive": "titleBlue",      "bold": true },
+        "text.link":      { "$primitive": "linkBlue",       "underline": true },
+        "accent.primary": { "$primitive": "labelSlate",     "bold": true },
+        "code.surface":   { "$primitive": "codeBg" }
+      }
+    },
+    "notty": {
+      "primitives": {
+        "fg": "#FFFFFF",
+        "bg": "#000000",
+        "link": "#FFFFFF"
+      },
+      "tokens": {
+        "status.success": { "bold": true },
+        "status.warning": { "bold": true },
+        "status.error":   { "bold": true },
+        "status.info":    { "bold": true },
+        "text.primary":   { "$primitive": "fg" },
+        "text.secondary": { "$primitive": "fg" },
+        "text.muted":     { "$primitive": "fg" },
+        "text.title":     { "bold": true },
+        "text.link":      { "$primitive": "link", "underline": true },
+        "accent.primary": { "bold": true },
+        "code.surface":   { "$primitive": "bg" }
+      },
+      "huh": "base16"
+    }
+  }
+}

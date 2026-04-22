@@ -1,0 +1,37 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "catppuccin-mocha",
+  "description": "Catppuccin Mocha palette for dark terminals. Uses catppuccin-mocha for chroma.",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "green":    "#a6e3a1",
+        "yellow":   "#f9e2af",
+        "red":      "#f38ba8",
+        "blue":     "#89b4fa",
+        "link":     "#89b4fa",
+        "mauve":    "#cba6f7",
+        "text":     "#cdd6f4",
+        "pink":     "#f5c2e7",
+        "subtext1": "#bac2de",
+        "overlay1": "#7f849c",
+        "base":     "#1e1e2e"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",    "bold": true },
+        "status.warning": { "$primitive": "yellow",   "bold": true },
+        "status.error":   { "$primitive": "red",      "bold": true },
+        "status.info":    { "$primitive": "blue",     "bold": true },
+        "text.primary":   { "$primitive": "text" },
+        "text.secondary": { "$primitive": "subtext1" },
+        "text.muted":     { "$primitive": "overlay1" },
+        "text.title":     { "$primitive": "pink",     "bold": true },
+        "text.link":      { "$primitive": "link",     "underline": true },
+        "accent.primary": { "$primitive": "mauve",    "bold": true },
+        "code.surface":   { "$primitive": "base" }
+      },
+      "chroma": "catppuccin-mocha",
+      "huh":    "catppuccin"
+    }
+  }
+}

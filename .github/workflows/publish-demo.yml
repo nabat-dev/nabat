@@ -1,0 +1,54 @@
+# Copyright 2026 The Nabat Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Publish Demo
+
+on:
+  push:
+    # branches: [main]
+    paths:
+      - docs/tapes/**
+      - examples/deploy/**
+      - .github/workflows/publish-demo.yml
+  workflow_dispatch:
+
+concurrency:
+  group: publish-demo
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Generate & Publish Demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate demo GIF
+        run: nix run .#demo
+
+      - name: Publish assets to R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: nabat
+          R2_DEST_PATH: demos/
+        run: nix run .#publish-demo
