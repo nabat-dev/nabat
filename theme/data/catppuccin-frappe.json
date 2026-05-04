@@ -1,0 +1,37 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "catppuccin-frappe",
+  "description": "Catppuccin Frappé palette for dark terminals. Uses catppuccin-frappe for chroma.",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "green":    "#a6d189",
+        "yellow":   "#e5c890",
+        "red":      "#e78284",
+        "blue":     "#8caaee",
+        "link":     "#8caaee",
+        "mauve":    "#ca9ee6",
+        "text":     "#c6d0f5",
+        "pink":     "#f4b8e4",
+        "subtext1": "#b5bfe2",
+        "overlay1": "#838ba7",
+        "base":     "#303446"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",    "bold": true },
+        "status.warning": { "$primitive": "yellow",   "bold": true },
+        "status.error":   { "$primitive": "red",      "bold": true },
+        "status.info":    { "$primitive": "blue",     "bold": true },
+        "text.primary":   { "$primitive": "text" },
+        "text.secondary": { "$primitive": "subtext1" },
+        "text.muted":     { "$primitive": "overlay1" },
+        "text.title":     { "$primitive": "pink",     "bold": true },
+        "text.link":      { "$primitive": "link",     "underline": true },
+        "accent.primary": { "$primitive": "mauve",    "bold": true },
+        "code.surface":   { "$primitive": "base" }
+      },
+      "chroma": "catppuccin-frappe",
+      "huh":    "catppuccin"
+    }
+  }
+}

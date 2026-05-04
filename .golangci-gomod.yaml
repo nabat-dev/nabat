@@ -1,0 +1,32 @@
+# Copyright 2026 The Nabat Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# go.mod supply-chain / directive hygiene. Used by CI via `nix run .#lint-gomod`
+# (not merged into the main golangci config so local runs stay focused on Go source).
+version: "2"
+
+linters:
+  enable:
+    - gomoddirectives
+
+  settings:
+    gomoddirectives:
+      # Forbid unexplained local-only replace directives (override with replace-allow-list if needed).
+      replace-local: false
+      retract-allow-no-explanation: false
+      # Validate module path format when enabled.
+      check-module-path: true
+
+run:
+  timeout: 2m

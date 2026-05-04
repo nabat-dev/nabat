@@ -1,0 +1,36 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "catppuccin-latte",
+  "description": "Catppuccin Latte palette for light terminals. Uses catppuccin-latte for chroma.",
+  "variants": {
+    "light": {
+      "primitives": {
+        "green":    "#40a02b",
+        "yellow":   "#df8e1d",
+        "red":      "#d20f39",
+        "blue":     "#1e66f5",
+        "link":     "#1e66f5",
+        "mauve":    "#8839ef",
+        "text":     "#4c4f69",
+        "pink":     "#ea76cb",
+        "subtext1": "#5c5f77",
+        "overlay1": "#8c8fa1",
+        "base":     "#eff1f5"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",    "bold": true },
+        "status.warning": { "$primitive": "yellow",   "bold": true },
+        "status.error":   { "$primitive": "red",      "bold": true },
+        "status.info":    { "$primitive": "blue",     "bold": true },
+        "text.primary":   { "$primitive": "text" },
+        "text.secondary": { "$primitive": "subtext1" },
+        "text.muted":     { "$primitive": "overlay1" },
+        "text.title":     { "$primitive": "pink",     "bold": true },
+        "text.link":      { "$primitive": "link",     "underline": true },
+        "accent.primary": { "$primitive": "mauve",    "bold": true },
+        "code.surface":   { "$primitive": "base" }
+      },
+      "chroma": "catppuccin-latte"
+    }
+  }
+}

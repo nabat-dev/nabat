@@ -1,0 +1,6 @@
+.direnv/
+.pre-commit-config.yaml
+coverage.out
+coverage.html
+docs/assets/*.gif
+bin/

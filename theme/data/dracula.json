@@ -1,0 +1,73 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "dracula",
+  "description": "Dracula Classic (dark) and Alucard Classic (light) per https://draculatheme.com/spec — hex values from the official syntax-highlighting specification. Dark uses chroma/glamour/huh \"dracula\". Light uses chroma \"github\" (no Alucard chroma style upstream yet) and glamour \"light\"; huh omitted so prompts follow Alucard tokens.",
+  "default": "dark",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "background":   "#282A36",
+        "foreground":   "#F8F8F2",
+        "current_line": "#6272A4",
+        "selection":    "#44475A",
+        "comment":      "#6272A4",
+        "red":          "#FF5555",
+        "orange":       "#FFB86C",
+        "yellow":       "#F1FA8C",
+        "green":        "#50FA7B",
+        "cyan":         "#8BE9FD",
+        "link":         "#8BE9FD",
+        "purple":       "#BD93F9",
+        "pink":         "#FF79C6"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",        "bold": true },
+        "status.warning": { "$primitive": "yellow",       "bold": true },
+        "status.error":   { "$primitive": "red",          "bold": true },
+        "status.info":    { "$primitive": "cyan",         "bold": true },
+        "text.primary":   { "$primitive": "foreground" },
+        "text.secondary": { "$primitive": "comment" },
+        "text.muted":     { "$primitive": "comment" },
+        "text.title":     { "$primitive": "pink",         "bold": true },
+        "text.link":      { "$primitive": "link",         "underline": true },
+        "accent.primary": { "$primitive": "purple",       "bold": true },
+        "code.surface":   { "$primitive": "background" }
+      },
+      "chroma":  "dracula",
+      "glamour": "dracula",
+      "huh":     "dracula"
+    },
+    "light": {
+      "primitives": {
+        "background":   "#FFFBEB",
+        "foreground":   "#1F1F1F",
+        "current_line": "#6C664B",
+        "selection":    "#CFCFDE",
+        "comment":      "#6C664B",
+        "red":          "#CB3A2A",
+        "orange":       "#A34D14",
+        "yellow":       "#846E15",
+        "green":        "#14710A",
+        "cyan":         "#036A96",
+        "link":         "#036A96",
+        "purple":       "#644AC9",
+        "pink":         "#A3144D"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",        "bold": true },
+        "status.warning": { "$primitive": "yellow",     "bold": true },
+        "status.error":   { "$primitive": "red",        "bold": true },
+        "status.info":    { "$primitive": "cyan",       "bold": true },
+        "text.primary":   { "$primitive": "foreground" },
+        "text.secondary": { "$primitive": "comment" },
+        "text.muted":     { "$primitive": "comment" },
+        "text.title":     { "$primitive": "pink",       "bold": true },
+        "text.link":      { "$primitive": "link",       "underline": true },
+        "accent.primary": { "$primitive": "purple",     "bold": true },
+        "code.surface":   { "$primitive": "background" }
+      },
+      "chroma":  "github",
+      "glamour": "light"
+    }
+  }
+}

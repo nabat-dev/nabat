@@ -1,0 +1,69 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "nabat",
+  "description": "Nabat brand palette with warm Persian rock-candy tones (saffron, pistachio, pomegranate, turquoise).",
+  "default": "dark",
+  "promptKnobs": {
+    "selectedPrefix": "✓ ",
+    "unselectedPrefix": "• ",
+    "border": "rounded"
+  },
+  "variants": {
+    "dark": {
+      "primitives": {
+        "roast":        "#2A231D",
+        "pistachio":    "#7EC87E",
+        "saffronAmber": "#E8A83A",
+        "pomegranate":  "#E05454",
+        "turquoise":    "#3EB0CC",
+        "crystalGold":  "#C89B3C",
+        "warmCream":    "#EDE4D3",
+        "saffronGold":  "#D4A853",
+        "warmLight":    "#D5CDC2",
+        "threadGray":   "#8A7E72",
+        "link":           "#3EB0CC"
+      },
+      "tokens": {
+        "text.primary":   { "$primitive": "warmCream" },
+        "text.secondary": { "$primitive": "warmLight" },
+        "text.muted":     { "$primitive": "threadGray" },
+        "text.title":     { "$primitive": "saffronGold", "bold": true },
+        "text.link":      { "$primitive": "link", "underline": true },
+        "accent.primary": { "$primitive": "crystalGold", "bold": true },
+        "status.success": { "$primitive": "pistachio", "bold": true },
+        "status.warning": { "$primitive": "saffronAmber", "bold": true },
+        "status.error":   { "$primitive": "pomegranate", "bold": true },
+        "status.info":    { "$primitive": "turquoise", "bold": true },
+        "code.surface":   { "$primitive": "roast" }
+      }
+    },
+    "light": {
+      "primitives": {
+        "warmCream":        "#EDE4D3",
+        "roastBrown":       "#2A1F18",
+        "walnut":           "#5C4F44",
+        "paleThread":       "#B5A89A",
+        "deepCrystal":      "#9C7A2A",
+        "deepSaffron":      "#A8842F",
+        "shelledPistachio": "#4F9F4F",
+        "burntSaffron":     "#B5791C",
+        "pomegranateSeed":  "#B23A3A",
+        "deepTile":         "#1F7E97",
+        "link":             "#1F7E97"
+      },
+      "tokens": {
+        "text.primary":   { "$primitive": "roastBrown" },
+        "text.secondary": { "$primitive": "walnut" },
+        "text.muted":     { "$primitive": "paleThread" },
+        "text.title":     { "$primitive": "deepSaffron", "bold": true },
+        "text.link":      { "$primitive": "link", "underline": true },
+        "accent.primary": { "$primitive": "deepCrystal", "bold": true },
+        "status.success": { "$primitive": "shelledPistachio", "bold": true },
+        "status.warning": { "$primitive": "burntSaffron", "bold": true },
+        "status.error":   { "$primitive": "pomegranateSeed", "bold": true },
+        "status.info":    { "$primitive": "deepTile", "bold": true },
+        "code.surface":   { "$primitive": "warmCream" }
+      }
+    }
+  }
+}

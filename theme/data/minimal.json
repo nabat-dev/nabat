@@ -1,0 +1,28 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "minimal",
+  "description": "Low-color theme that relies mostly on bold styling. Variant=notty is ideal for CI and piped output.",
+  "variants": {
+    "notty": {
+      "primitives": {
+        "fg": "#FFFFFF",
+        "bg": "#000000",
+        "link": "#FFFFFF"
+      },
+      "tokens": {
+        "status.success": { "bold": true },
+        "status.warning": { "bold": true },
+        "status.error":   { "bold": true },
+        "status.info":    { "bold": true },
+        "text.primary":   { "$primitive": "fg" },
+        "text.secondary": { "$primitive": "fg" },
+        "text.muted":     { "$primitive": "fg" },
+        "text.title":     { "bold": true },
+        "text.link":      { "$primitive": "link", "underline": true },
+        "accent.primary": { "bold": true },
+        "code.surface":   { "$primitive": "bg" }
+      },
+      "huh": "base16"
+    }
+  }
+}

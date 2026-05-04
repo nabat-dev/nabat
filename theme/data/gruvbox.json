@@ -1,0 +1,84 @@
+{
+  "$schema": "https://nabat.dev/schemas/theme/v1.json",
+  "name": "gruvbox",
+  "description": "Gruvbox retro groove palette (Pavel Pertsev / morhetz). Hex values follow https://github.com/morhetz/gruvbox — dark bg0/fg1 and light bg0/fg tones with accent reds, greens, yellows, blues, purples, aquas, orange. pickVariant selects dark or light by terminal luminance. Chroma styles \"gruvbox\" / \"gruvbox-light\"; glamour dark/light. Huh omitted so prompts follow Gruvbox tokens.",
+  "default": "dark",
+  "variants": {
+    "dark": {
+      "primitives": {
+        "bg0":    "#282828",
+        "bg1":    "#3c3836",
+        "bg2":    "#504945",
+        "bg3":    "#665c54",
+        "bg4":    "#7c6f64",
+        "fg0":    "#fbf1c7",
+        "fg1":    "#ebdbb2",
+        "fg2":    "#d5c4a1",
+        "fg3":    "#bdae93",
+        "fg4":    "#a89984",
+        "gray":   "#928374",
+        "red":    "#fb4934",
+        "green":  "#b8bb26",
+        "yellow": "#fabd2f",
+        "blue":   "#83a598",
+        "link":   "#83a598",
+        "purple": "#d3869b",
+        "aqua":   "#8ec07c",
+        "orange": "#fe8019"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",   "bold": true },
+        "status.warning": { "$primitive": "yellow",  "bold": true },
+        "status.error":   { "$primitive": "red",     "bold": true },
+        "status.info":    { "$primitive": "blue",    "bold": true },
+        "text.primary":   { "$primitive": "fg1" },
+        "text.secondary": { "$primitive": "fg2" },
+        "text.muted":     { "$primitive": "gray" },
+        "text.title":     { "$primitive": "orange",  "bold": true },
+        "text.link":      { "$primitive": "link",    "underline": true },
+        "accent.primary": { "$primitive": "purple",  "bold": true },
+        "code.surface":   { "$primitive": "bg1" }
+      },
+      "chroma":  "gruvbox",
+      "glamour": "dark"
+    },
+    "light": {
+      "primitives": {
+        "bg0":    "#fbf1c7",
+        "bg1":    "#ebdbb2",
+        "bg2":    "#d5c4a1",
+        "bg3":    "#bdae93",
+        "bg4":    "#a89984",
+        "fg0":    "#282828",
+        "fg1":    "#3c3836",
+        "fg2":    "#504945",
+        "fg3":    "#665c54",
+        "fg4":    "#7c6f64",
+        "gray":   "#928374",
+        "red":    "#cc241d",
+        "green":  "#79740e",
+        "yellow": "#b57614",
+        "blue":   "#076678",
+        "link":   "#076678",
+        "purple": "#8f3f71",
+        "aqua":   "#427b58",
+        "orange": "#af3a03"
+      },
+      "tokens": {
+        "status.success": { "$primitive": "green",   "bold": true },
+        "status.warning": { "$primitive": "yellow",  "bold": true },
+        "status.error":   { "$primitive": "red",     "bold": true },
+        "status.info":    { "$primitive": "blue",    "bold": true },
+        "text.primary":   { "$primitive": "fg1" },
+        "text.secondary": { "$primitive": "fg2" },
+        "text.muted":     { "$primitive": "gray" },
+        "text.title":     { "$primitive": "orange",  "bold": true },
+        "text.link":      { "$primitive": "link",    "underline": true },
+        "accent.primary": { "$primitive": "purple",  "bold": true },
+        "code.surface":   { "$primitive": "bg1" }
+      },
+      "chroma":  "gruvbox-light",
+      "glamour": "light"
+    }
+  }
+}
