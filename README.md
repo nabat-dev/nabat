@@ -1,4 +1,3 @@
-<!-- TODO: drop a logo at docs/assets/logo.svg — a crystal on a thread in the Nabat palette works well. -->
 <!-- ![Nabat](docs/assets/logo.svg) -->
 
 # Nabat
@@ -28,7 +27,11 @@
   - [The App](#the-app)
   - [Commands](#commands)
   - [Positional Args](#positional-args)
+    - [Adaptive Resolution](#adaptive-resolution)
+    - [Passthrough Args](#passthrough-args)
   - [Flags](#flags)
+    - [Environment Variables](#environment-variables)
+    - [Deprecation](#deprecation)
   - [Binding resolved values](#binding-resolved-values)
   - [Prompts](#prompts)
   - [Lifecycle Hooks](#lifecycle-hooks)
@@ -144,7 +147,6 @@ import (
     "os"
 
     "nabat.dev/nabat"
-    "nabat.dev/manpage"
 )
 
 func main() {
@@ -157,7 +159,6 @@ func main() {
         nabat.WithDescription("My CLI tool"),
         nabat.WithVersion("0.1.0"),
         nabat.WithCompletion(),
-        nabat.WithExtension(manpage.New()),
 
         nabat.WithCommand("deploy",
             nabat.WithDescription("Deploy an application"),
@@ -191,6 +192,8 @@ func main() {
     }
 }
 ```
+
+Opt-in extensions (man-page generation, structured logging, and more) are installed with `WithExtension` from their own subpackage — see [Extensions](#extensions).
 
 Try it:
 
@@ -291,7 +294,7 @@ More command options:
 | `WithGroup("Operations")`  | Group commands in help output.                                |
 | `WithHidden()`             | Hide from help but keep it usable.                            |
 | `WithTypoHints("deploay")` | Suggest this command when the user makes a typo.              |
-| `WithAnnotation(key, val)` | Set a Cobra annotation.                                       |
+| `WithAnnotation(key, val)` | Set a raw Cobra annotation — escape hatch for shell-completion directives or third-party tooling metadata. |
 | `WithExample(shell)`       | Example block in help. Uses shell syntax highlighting on TTY. |
 
 ### Positional Args
@@ -372,6 +375,23 @@ flowchart LR
 4. **Typed default** – the value you passed to `WithArg` or `WithSelectArg`.
 
 ![Cascade](https://nabat.dev/demos/cascade.gif)
+
+#### Passthrough Args
+
+`WithPassthrough` lets a command accept arguments that appear after `--`. These are separate from positional args and are accessed as a raw `[]string`:
+
+```go
+nabat.WithCommand("exec",
+    nabat.WithArg("service", "", nabat.WithRequired()),
+    nabat.WithPassthrough("command [args...]", "command to run"),
+    nabat.WithRun(func(c *nabat.Context) error {
+        if c.HasPassthrough() {
+            return run(c.Passthrough())
+        }
+        return nil
+    }),
+)
+```
 
 ### Flags
 
@@ -628,21 +648,6 @@ merge multiple options of the same type for reuse in helpers. `WithCommandInit` 
 `WithRootInit` run once after a command exists (for example to call `Command.OnPreRun`).
 Inline app setup without a separate package type uses `WithExtension(AsExtension("name", func(nabat.AppSurface) error))`; `AsExtension` runs with other extensions after help, version, and completion are installed.
 
-`WithPassthrough` lets a command accept arguments after `--`:
-
-```go
-nabat.WithCommand("exec",
-    nabat.WithArg("service", "", nabat.WithRequired()),
-    nabat.WithPassthrough("command [args...]", "command to run"),
-    nabat.WithRun(func(c *nabat.Context) error {
-        if c.HasPassthrough() {
-            return run(c.Passthrough())
-        }
-        return nil
-    }),
-)
-```
-
 ### Semantic Output
 
 Semantic helpers write a message with a symbol and optional key-value pairs.
@@ -767,7 +772,11 @@ cert, err := c.FilePicker("Certificate",
     nabat.WithAllowedTypes(".pem", ".crt"),
     nabat.WithDefault(""),
 )
+```
 
+`nabat.Select` and `nabat.MultiSelect` are package-level functions rather than methods on `Context` because Go does not support generic methods; `T` is inferred from the type of the choices slice.
+
+```go
 // Select — defaultVal is a positional arg; T inferred from choices
 env, err := nabat.Select(c, "Environment",
     []string{"staging", "production"},
@@ -950,7 +959,7 @@ nabat.New("myctl",
     nabat.WithCompletion(
         nabat.WithCompletionName("comp"),             // myctl comp bash
         nabat.WithCompletionHidden(),                 // hide from help
-        nabat.WithCompletionShells("bash", "zsh"),    // only these shells
+        nabat.WithCompletionShells("bash", "zsh", "fish", "powershell"),    // only these shells
     ),
 )
 ```
@@ -1094,10 +1103,11 @@ if err != nil {
 Nabat only shows interactive prompts when stdin is a real terminal. In CI, piped input, or non-interactive shells, the prompt step is skipped and Nabat uses the default value — or returns an error if `WithRequired()` was set. Supply the value via a CLI arg or add `WithEnv("KEY")` so it can come from an environment variable.
 
 **`c.Success`, `c.Warn`, `c.Error`, and `c.Info` output is not in stdout.**
-These four helpers write to **stderr** (`errOut`), not stdout, so that piped stdout stays clean. In tests, capture the fourth return value of `nabattest.NewIO()`:
+These four helpers write to **stderr** (`errOut`), not stdout, so that piped stdout stays clean. In tests, name all four return values of `nabattest.NewIO()`:
 
 ```go
-io, _, out, errOut := nabattest.NewIO()
+io, in, out, errOut := nabattest.NewIO()
+// in     → stdin   (write to simulate user input)
 // out    → stdout  (Print, Println, Table, JSON, …)
 // errOut → stderr  (Success, Warn, Error, Info)
 ```
@@ -1215,6 +1225,8 @@ func TestDeploy(t *testing.T) {
     require.Contains(t, errOut.String(), "deployed") // Success writes to stderr
 }
 ```
+
+`nabattest.NewIO()` returns four values: the IO bundle and individual `*bytes.Buffer` values for stdin (`in`), stdout (`out`), and stderr (`errOut`). Discard those you do not need with `_`.
 
 Test run options:
 
@@ -1363,6 +1375,8 @@ go test -race -shuffle=on -covermode=atomic -coverpkg=./... -coverprofile=covera
 ## Contributing
 
 Issues and pull requests are welcome.
+Fork the repository, create a branch from `main`, make your changes, and open a pull request.
+CI runs format checks, lint, and the full test suite with race detection — all must pass before merge.
 Please read these documents before you open a PR:
 
 - [Design Principles](docs/design-principles.md)
