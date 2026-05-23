@@ -309,3 +309,105 @@ func TestNonInteractiveContext(t *testing.T) {
 	require.NoError(t, nabattest.Run(t, app, []string{"test"}))
 	assert.False(t, isInteractiveResult)
 }
+
+func TestSetContextPropagatesValueToRunFunc(t *testing.T) {
+	t.Parallel()
+
+	type runtimeKey struct{}
+
+	var gotVal string
+	io, _, _, _ := nabattest.NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	require.NoError(t, app.OnPreRun(func(c *nabat.Context) error {
+		c.SetContext(context.WithValue(c.Context(), runtimeKey{}, "injected"))
+		return nil
+	}))
+	app.MustCommand("run", nabat.WithRun(func(c *nabat.Context) error {
+		v, ok := c.Value(runtimeKey{}).(string)
+		if !ok {
+			return fmt.Errorf("expected string in context, got %T", c.Value(runtimeKey{}))
+		}
+		gotVal = v
+		return nil
+	}))
+
+	require.NoError(t, nabattest.Run(t, app, []string{"run"}))
+	assert.Equal(t, "injected", gotVal)
+}
+
+func TestSetContextPreservesDeadline(t *testing.T) {
+	t.Parallel()
+
+	type extraKey struct{}
+
+	dl := time.Now().Add(time.Hour)
+	goCtx, cancel := context.WithDeadline(context.Background(), dl)
+	defer cancel()
+
+	var gotDeadline time.Time
+	io, _, _, _ := nabattest.NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	require.NoError(t, app.OnPreRun(func(c *nabat.Context) error {
+		c.SetContext(context.WithValue(c.Context(), extraKey{}, "extra"))
+		return nil
+	}))
+	app.MustCommand("run", nabat.WithRun(func(c *nabat.Context) error {
+		gotDeadline, _ = c.Deadline()
+		return nil
+	}))
+
+	require.NoError(t, nabattest.Run(t, app, []string{"run"}, nabattest.WithContext(goCtx)))
+	assert.Equal(t, dl.Unix(), gotDeadline.Unix())
+}
+
+func TestSetContextVisibleInCommandPreRun(t *testing.T) {
+	t.Parallel()
+
+	type runtimeKey struct{}
+
+	var gotInPreRun string
+	io, _, _, _ := nabattest.NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	require.NoError(t, app.OnPreRun(func(c *nabat.Context) error {
+		c.SetContext(context.WithValue(c.Context(), runtimeKey{}, "from-global"))
+		return nil
+	}))
+	app.MustCommand("run",
+		nabat.WithPreRun(func(c *nabat.Context) error {
+			v, ok := c.Value(runtimeKey{}).(string)
+			if !ok {
+				return fmt.Errorf("expected string in context, got %T", c.Value(runtimeKey{}))
+			}
+			gotInPreRun = v
+			return nil
+		}),
+		nabat.WithRun(func(c *nabat.Context) error { return nil }),
+	)
+
+	require.NoError(t, nabattest.Run(t, app, []string{"run"}))
+	assert.Equal(t, "from-global", gotInPreRun)
+}
+
+func TestSetContextNilAllowsNilGuardedMethods(t *testing.T) {
+	t.Parallel()
+
+	type someKey struct{}
+
+	io, _, _, _ := nabattest.NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	require.NoError(t, app.OnPreRun(func(c *nabat.Context) error {
+		c.SetContext(nil) //nolint:staticcheck // deliberately testing nil-context guard behavior
+		return nil
+	}))
+	app.MustCommand("run", nabat.WithRun(func(c *nabat.Context) error {
+		// All four context.Context delegation methods guard against nil c.ctx.
+		assert.Nil(t, c.Value(someKey{}))
+		_, hasDeadline := c.Deadline()
+		assert.False(t, hasDeadline)
+		assert.Nil(t, c.Done())
+		assert.NoError(t, c.Err())
+		return nil
+	}))
+
+	require.NoError(t, nabattest.Run(t, app, []string{"run"}))
+}

@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 
 	"nabat.dev/nabat"
@@ -160,8 +161,8 @@ func runInternal(tb testing.TB, app *nabat.App, args []string, parallel bool, op
 func setProcessEnv(values map[string]string) (func(), error) {
 	restore := make([]func(), 0, len(values))
 	undo := func() {
-		for i := len(restore) - 1; i >= 0; i-- {
-			restore[i]()
+		for _, fn := range slices.Backward(restore) {
+			fn()
 		}
 	}
 	for k, v := range values {

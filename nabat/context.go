@@ -89,6 +89,41 @@ func (c *Context) Value(key any) any {
 	return c.ctx.Value(key)
 }
 
+// Context returns the underlying [context.Context] carried by this [Context].
+// Use it as the parent when building a derived context for [Context.SetContext]:
+//
+//	enriched := context.WithValue(c.Context(), key, val)
+//	c.SetContext(enriched)
+//
+// Using c itself as the parent would create an infinite delegation cycle;
+// always use Context() as the parent.
+func (c *Context) Context() context.Context {
+	if c == nil || c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
+}
+
+// SetContext replaces the underlying [context.Context] carried by this
+// [Context]. Use it in [App.OnPreRun] or [Command.OnPreRun] hooks to
+// propagate request-scoped values to downstream hooks and the command's
+// [RunFunc].
+//
+// The typical pattern pairs SetContext with [Context.Context] and a
+// package-level WithContext/FromContext accessor pair:
+//
+//	app.OnPreRun(func(c *Context) error {
+//	    rt := runtime.New()
+//	    c.SetContext(runtime.WithContext(c.Context(), rt))
+//	    return nil
+//	})
+//
+// Always pass [Context.Context] as the parent when deriving a new context.
+// Passing c itself creates an infinite delegation cycle.
+func (c *Context) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
 // Args returns a copy of the positional arguments before any "--".
 // The returned slice is always non-nil; iterate or take len without a nil check.
 // Arguments after "--" are accessible via [Context.Passthrough].

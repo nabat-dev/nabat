@@ -721,6 +721,51 @@ func ExampleArgOptions() {
 	// staging
 }
 
+// ExampleContext_SetContext demonstrates propagating a request-scoped value
+// from an OnPreRun hook to a command handler using SetContext together with the
+// standard WithContext/FromContext accessor pattern.
+func ExampleContext_SetContext() {
+	// runtimeKey and the accessor pair live in their own package in real code.
+	type runtimeKey struct{}
+	withRuntime := func(ctx context.Context, val string) context.Context {
+		return context.WithValue(ctx, runtimeKey{}, val)
+	}
+	fromContext := func(ctx context.Context) string {
+		v, ok := ctx.Value(runtimeKey{}).(string)
+		if !ok {
+			return ""
+		}
+		return v
+	}
+
+	io, _, out, _ := nabattest.NewIO()
+	app, err := nabat.New("myctl", nabat.WithIO(io),
+		nabat.WithRun(func(c *nabat.Context) error {
+			c.Print(fromContext(c))
+			return nil
+		}),
+	)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err = app.OnPreRun(func(c *nabat.Context) error {
+		// Use c.Context() as the parent to avoid an infinite delegation cycle.
+		c.SetContext(withRuntime(c.Context(), "production"))
+		return nil
+	}); err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err = app.RunArgs(context.Background()); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Print(strings.TrimSpace(out.String()))
+	// Output:
+	// production
+}
+
 // ExampleAsExtension wraps a function as an extension; Init runs during New
 // after help, version, and completion are registered.
 func ExampleAsExtension() {
