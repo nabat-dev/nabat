@@ -37,7 +37,7 @@ import (
 var forbiddenLeafImports = []string{
 	"nabat.dev/logging",
 	"nabat.dev/manpage",
-	"nabat.dev/nabattest",
+	"nabat.dev/nabat/nabattest",
 }
 
 // forbiddenLeafImportPrefix flags any import that pulls in the nabat

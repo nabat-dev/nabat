@@ -161,7 +161,7 @@ Inline `// Example:` blocks live next to the symbol they document. The reader is
 
 - **Inline `// Example:` blocks inside `package nabat`:** write names unqualified (`WithRun(...)`, not `nabat.WithRun(...)`).
 - **`example_test.go` and `doc.go`:** write names fully qualified (`nabat.WithRun(...)`). These are the copy-pasteable forms users see on pkg.go.dev's landing page and at the top of imports.
-- **Subpackages** (e.g. `nabattest`, `manpage`, `completion`, `logging`): apply the same rule with their own package name.
+- **Subpackages** (e.g. `nabat/nabattest`, `manpage`, `completion`, `logging`): apply the same rule with their own package name.
 
 ```go
 // Inline example inside package nabat — unqualified:

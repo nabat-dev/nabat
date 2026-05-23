@@ -128,7 +128,7 @@ import (
     "nabat.dev/theme"      // theme constants and recipes
     "nabat.dev/manpage"    // man page generation (extension)
     "nabat.dev/logging"    // themed slog logger (extension)
-    "nabat.dev/nabattest"  // test helpers: NewIO, NewTTYIO, Run, RunParallel
+    "nabat.dev/nabat/nabattest"  // test helpers: NewIO, NewTTYIO, Run, RunParallel
 )
 ```
 
@@ -1113,7 +1113,7 @@ io, in, out, errOut := nabattest.NewIO()
 ```
 
 **Colors or styling do not appear.**
-Nabat disables colors automatically when it detects a non-terminal stream, or when the environment sets `NO_COLOR=1`, `CLICOLOR=0`, or `TERM=dumb`. This is intentional for pipes and log files. In tests, use `nabattest.NewTTYIO()` (or pass `nabattest.WithFakeTTY()` to `Run`) if you need the styled output code path.
+Nabat disables colors automatically when it detects a non-terminal stream, or when the environment sets `NO_COLOR=1`, `CLICOLOR=0`, or `TERM=dumb`. This is intentional for pipes and log files. In tests, use `nabattest.NewTTYIO()` if you need the styled output code path.
 
 ---
 
@@ -1208,7 +1208,7 @@ import (
     "testing"
 
     "nabat.dev/nabat"
-    "nabat.dev/nabattest"
+    "nabat.dev/nabat/nabattest"
     "github.com/stretchr/testify/require"
 )
 
@@ -1234,7 +1234,6 @@ Test run options:
 |------------------------------|--------------------------------------------|
 | `nabattest.WithContext(ctx)` | Set a custom context.                      |
 | `nabattest.WithEnvVars(map)` | Set env vars for the run (restored after). |
-| `nabattest.WithFakeTTY()`    | Make streams report as terminal.           |
 
 Use `nabattest.NewTTYIO()` instead of `nabattest.NewIO()` when the code under test uses prompts, spinners, `c.IsInteractive()`, or any other code path that checks whether streams are terminals. `NewTTYIO()` marks all three streams as TTY; `NewIO()` marks them as non-TTY (the safe default for most tests).
 
@@ -1268,13 +1267,13 @@ go run ./examples/deploy deploy --help
 
 ## Subpackages
 
-| Package                            | Role                                                                                                             |
-|------------------------------------|------------------------------------------------------------------------------------------------------------------|
-| [`nabat.dev/nabat`](nabat)         | Core: `App`, `Command`, `Context`, `IOStreams`, args, flags, output, prompts, themes, help, version, completion. |
-| [`nabat.dev/theme`](theme)         | Theme primitives, built-in catalog, JSON Schema, name constants.                                                 |
-| [`nabat.dev/manpage`](manpage)     | Extension: `man` subcommand for roff man page generation.                                                        |
-| [`nabat.dev/logging`](logging)     | Extension: themed `*slog.Logger` with `--verbose` / `--log-level` flag wiring.                                   |
-| [`nabat.dev/nabattest`](nabattest) | Test helpers: `NewIO`, `NewTTYIO`, `Run`, `RunParallel`.                                                         |
+| Package                                            | Role                                                                                                             |
+|----------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| [`nabat.dev/nabat`](nabat)                         | Core: `App`, `Command`, `Context`, `IOStreams`, args, flags, output, prompts, themes, help, version, completion. |
+| [`nabat.dev/nabat/nabattest`](nabat/nabattest)     | Test helpers (nested under core): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`.                                     |
+| [`nabat.dev/theme`](theme)                         | Theme primitives, built-in catalog, JSON Schema, name constants.                                                 |
+| [`nabat.dev/manpage`](manpage)                     | Extension: `man` subcommand for roff man page generation.                                                        |
+| [`nabat.dev/logging`](logging)                     | Extension: themed `*slog.Logger` with `--verbose` / `--log-level` flag wiring.                                   |
 
 ---
 

@@ -24,7 +24,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"nabat.dev/nabat"
-	"nabat.dev/nabattest"
+	"nabat.dev/nabat/nabattest"
 	"nabat.dev/theme"
 )
 

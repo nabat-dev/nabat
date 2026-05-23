@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"nabat.dev/nabat"
-	"nabat.dev/nabattest"
+	"nabat.dev/nabat/nabattest"
 )
 
 // TestOutputStreamRouting locks in the POSIX-correct routing: Success, Info,

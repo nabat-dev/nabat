@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"nabat.dev/nabat"
-	"nabat.dev/nabattest"
+	"nabat.dev/nabat/nabattest"
 )
 
 func newVersionApp(t *testing.T, opts ...nabat.Option) (*nabat.App, *bytes.Buffer, *bytes.Buffer) {

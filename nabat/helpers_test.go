@@ -19,7 +19,7 @@ package nabat
 // These mirror the API in nabattest but are defined here to avoid an import
 // cycle: internal test files (package nabat) cannot import nabattest because
 // nabattest itself imports nabat. External test packages (package nabat_test)
-// should import "nabat.dev/nabattest" directly.
+// should import "nabat.dev/nabat/nabattest" directly.
 
 import (
 	"bytes"

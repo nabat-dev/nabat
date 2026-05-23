@@ -27,12 +27,13 @@ Nabat is split between a small **agnostic core** (the `nabat` package) and a set
 of **opt-in extension subpackages** that build on the core's public extension
 API.
 
-| Package                | Role                                                                                |
-|------------------------|-------------------------------------------------------------------------------------|
-| `nabat.dev`            | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Recipe` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
-| `nabat.dev/theme`      | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Recipe`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded DTCG JSON manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, …), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
-| `nabat.dev/manpage`    | `man` subcommand (roff/man-page generation)                                         |
-| `nabat.dev/logging`    | Styled `*slog.Logger` install with --verbose / --log-level flag wiring; derives its level / key=value styles from `theme.ResolvedTheme` via `logging.FromTheme`. |
+| Package                     | Role                                                                                |
+|-----------------------------|-------------------------------------------------------------------------------------|
+| `nabat.dev`                 | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Recipe` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
+| `nabat.dev/nabat/nabattest` | Test helpers nested under core (analogous to `net/http/httptest`): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`. Not imported by production code. |
+| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Recipe`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded DTCG JSON manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, …), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
+| `nabat.dev/manpage`         | `man` subcommand (roff/man-page generation)                                         |
+| `nabat.dev/logging`         | Styled `*slog.Logger` install with --verbose / --log-level flag wiring; derives its level / key=value styles from `theme.ResolvedTheme` via `logging.FromTheme`. |
 
 The core is **agnostic about extensions**: it knows only the `Extension`
 interface (`fmt.Stringer` + `Init(AppSurface) error`) and the `AppSurface` API

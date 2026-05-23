@@ -157,7 +157,7 @@ func WithEnvVars(values map[string]string) RunOption
 Tests in `package nabat_test` import the helper:
 
 ```go
-import "nabat.dev/nabattest"
+import "nabat.dev/nabat/nabattest"
 
 func TestDeploy(t *testing.T) {
     t.Parallel()
@@ -724,7 +724,7 @@ import (
     "strings"
 
     "nabat.dev/nabat"
-    "nabat.dev/nabattest"
+    "nabat.dev/nabat/nabattest"
 )
 
 func ExampleNew() {

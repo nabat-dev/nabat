@@ -21,7 +21,7 @@ import (
 
 	"nabat.dev/logging"
 	"nabat.dev/nabat"
-	"nabat.dev/nabattest"
+	"nabat.dev/nabat/nabattest"
 )
 
 func ExampleNew() {

@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"nabat.dev/nabat"
-	"nabat.dev/nabattest"
+	"nabat.dev/nabat/nabattest"
 )
 
 func ExampleNewIO() {

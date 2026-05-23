@@ -14,13 +14,12 @@
 
 // Package nabattest provides test helpers for Nabat CLI applications.
 //
-// Import this package in test files to get ergonomic helpers for executing
-// apps with explicit argument lists and for constructing buffer-backed IO
-// bundles for output capture.
+// It follows the same pattern as [net/http/httptest]: a real, importable
+// package nested under the library it supports.
 //
 //	import (
 //	    "nabat.dev/nabat"
-//	    "nabat.dev/nabattest"
+//	    "nabat.dev/nabat/nabattest"
 //	)
 //
 //	func TestDeploy(t *testing.T) {

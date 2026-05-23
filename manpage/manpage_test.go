@@ -25,7 +25,7 @@ import (
 
 	"nabat.dev/manpage"
 	"nabat.dev/nabat"
-	"nabat.dev/nabattest"
+	"nabat.dev/nabat/nabattest"
 )
 
 func newApp(t *testing.T, opts ...nabat.Option) (*nabat.App, *bytes.Buffer, *bytes.Buffer) {
