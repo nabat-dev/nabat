@@ -210,8 +210,13 @@ deployctl deploy staging --yes
 					}
 				}
 
-				if err := c.Spinner("Connecting to cluster...", func() error {
+				if err := c.Spinner("Connecting to cluster...", func(sp *nabat.Spinner) error {
 					time.Sleep(800 * time.Millisecond)
+					sp.SetText("Spinning up pods...")
+					time.Sleep(800 * time.Millisecond)
+					sp.SetText("Deploying pods...")
+					time.Sleep(800 * time.Millisecond)
+					sp.SetText("Done!")
 					return nil
 				}, nabat.WithSpinnerType(nabat.SpinnerDots())); err != nil {
 					return err

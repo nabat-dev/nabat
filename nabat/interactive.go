@@ -15,13 +15,9 @@
 package nabat
 
 import (
-	"context"
 	"fmt"
 
 	"charm.land/huh/v2"
-	"charm.land/huh/v2/spinner"
-
-	"nabat.dev/theme"
 )
 
 // runAdhocPromptConfig applies [FieldOption] values to a [promptConfig],
@@ -48,129 +44,6 @@ func (a *App) applyHuhTheme(form *huh.Form) {
 		return
 	}
 	form.WithTheme(huhTheme)
-}
-
-// SpinnerType selects spinner frames for [WithSpinnerType] and [Context.Spinner].
-type SpinnerType spinner.Type
-
-// Spinner presets for use with [WithSpinnerType] and [Context.Spinner].
-// These are aliases for charm.land/huh/v2/spinner types, so callers do not
-// need to import the spinner package directly.
-//
-// Available presets:
-//
-//   - [SpinnerLine]      — rotating line (| / - \)
-//   - [SpinnerDots]      — Braille-dot animation (default)
-//   - [SpinnerMiniDot]   — single Braille dot
-//   - [SpinnerJump]      — jumping dot animation
-//   - [SpinnerPoints]    — three pulsing points
-//   - [SpinnerPulse]     — pulsing block
-//   - [SpinnerGlobe]     — rotating globe emoji
-//   - [SpinnerMoon]      — moon-phase animation
-//   - [SpinnerMonkey]    — see/hear/speak-no-evil monkey emoji
-//   - [SpinnerMeter]     — filling meter animation
-//   - [SpinnerHamburger] — three-line hamburger animation
-//   - [SpinnerEllipsis]  — animated ellipsis (., .., ...)
-
-// SpinnerLine returns the rotating-line spinner preset (| / - \).
-func SpinnerLine() SpinnerType { return SpinnerType(spinner.Line) }
-
-// SpinnerDots returns the Braille-dot spinner preset (default for
-// [Context.Spinner]).
-func SpinnerDots() SpinnerType { return SpinnerType(spinner.Dots) }
-
-// SpinnerMiniDot returns the single-Braille-dot spinner preset.
-func SpinnerMiniDot() SpinnerType { return SpinnerType(spinner.MiniDot) }
-
-// SpinnerJump returns the jumping-dot spinner preset.
-func SpinnerJump() SpinnerType { return SpinnerType(spinner.Jump) }
-
-// SpinnerPoints returns the three-pulsing-points spinner preset.
-func SpinnerPoints() SpinnerType { return SpinnerType(spinner.Points) }
-
-// SpinnerPulse returns the pulsing-block spinner preset.
-func SpinnerPulse() SpinnerType { return SpinnerType(spinner.Pulse) }
-
-// SpinnerGlobe returns the rotating-globe-emoji spinner preset.
-func SpinnerGlobe() SpinnerType { return SpinnerType(spinner.Globe) }
-
-// SpinnerMoon returns the moon-phase-animation spinner preset.
-func SpinnerMoon() SpinnerType { return SpinnerType(spinner.Moon) }
-
-// SpinnerMonkey returns the see/hear/speak-no-evil-monkey-emoji spinner preset.
-func SpinnerMonkey() SpinnerType { return SpinnerType(spinner.Monkey) }
-
-// SpinnerMeter returns the filling-meter-animation spinner preset.
-func SpinnerMeter() SpinnerType { return SpinnerType(spinner.Meter) }
-
-// SpinnerHamburger returns the three-line-hamburger-animation spinner preset.
-func SpinnerHamburger() SpinnerType { return SpinnerType(spinner.Hamburger) }
-
-// SpinnerEllipsis returns the animated-ellipsis spinner preset (., .., ...).
-func SpinnerEllipsis() SpinnerType { return SpinnerType(spinner.Ellipsis) }
-
-type spinnerConfig struct {
-	spinnerType SpinnerType
-}
-
-// SpinnerOption configures [Context.Spinner].
-type SpinnerOption func(*spinnerConfig) error
-
-// WithSpinnerType sets the spinner animation preset.
-//
-// Example:
-//
-//	c.Spinner("Deploying...", func() error {
-//		return nil
-//	}, WithSpinnerType(SpinnerDots()))
-func WithSpinnerType(t SpinnerType) SpinnerOption {
-	return func(c *spinnerConfig) error {
-		c.spinnerType = t
-		return nil
-	}
-}
-
-// Spinner runs fn while showing a spinner on stderr in interactive terminals.
-//
-// Errors:
-//   - any error returned by fn
-//   - errors from applying [SpinnerOption] values
-//   - errors from the underlying spinner implementation
-func (c *Context) Spinner(title string, fn func() error, opts ...SpinnerOption) error {
-	cfg := &spinnerConfig{
-		spinnerType: SpinnerDots(),
-	}
-	var errs ConfigErrors
-	for i, opt := range opts {
-		if opt == nil {
-			errs.AddErr(fmtErrInvalidOption("spinner option", i))
-			continue
-		}
-		if err := opt(cfg); err != nil {
-			errs.AddErr(err)
-		}
-	}
-	if errs.HasIssues() {
-		return &errs
-	}
-
-	s := spinner.New().
-		Title(title).
-		Type(spinner.Type(cfg.spinnerType)).
-		WithOutput(c.io.RawErrOut()).
-		WithInput(c.io.RawIn()).
-		WithTheme(spinner.ThemeFunc(func(isDark bool) *spinner.Styles {
-			styles := spinner.ThemeDefault(isDark)
-			info := c.app.Theme().Style(theme.StatusInfo)
-			styles.Spinner = info
-			styles.Title = info
-			return styles
-		})).
-		Context(c).
-		ActionWithErr(func(_ context.Context) error {
-			return fn()
-		})
-	return s.Run()
 }
 
 // Input asks for one string value when [Context.IsInteractive] is true.

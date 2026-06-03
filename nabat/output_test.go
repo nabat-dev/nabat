@@ -570,7 +570,7 @@ func TestWithSpinnerTypeOption(t *testing.T) {
 	io, _, _, _ := nabattest.NewIO()
 	app := nabat.MustNew("test", nabat.WithIO(io))
 	app.MustCommand("run", nabat.WithRun(func(c *nabat.Context) error {
-		return c.Spinner("working", func() error {
+		return c.Spinner("working", func(_ *nabat.Spinner) error {
 			return nil
 		}, nabat.WithSpinnerType(nabat.SpinnerDots()))
 	}))
@@ -584,7 +584,7 @@ func TestSpinnerNonInteractive(t *testing.T) {
 	io, _, _, _ := nabattest.NewIO()
 	app := nabat.MustNew("test", nabat.WithIO(io))
 	app.MustCommand("test", nabat.WithRun(func(c *nabat.Context) error {
-		return c.Spinner("loading", func() error {
+		return c.Spinner("loading", func(_ *nabat.Spinner) error {
 			called = true
 			return nil
 		})
@@ -601,7 +601,7 @@ func TestSpinnerPropagatesError(t *testing.T) {
 	io, _, _, _ := nabattest.NewIO()
 	app := nabat.MustNew("test", nabat.WithIO(io))
 	app.MustCommand("test", nabat.WithRun(func(c *nabat.Context) error {
-		return c.Spinner("loading", func() error {
+		return c.Spinner("loading", func(_ *nabat.Spinner) error {
 			return context.DeadlineExceeded
 		})
 	}))
@@ -619,7 +619,7 @@ func TestSpinnerClosureCapturesContext(t *testing.T) {
 	app.MustCommand("test",
 		nabat.WithArg("env", "staging"),
 		nabat.WithRun(func(c *nabat.Context) error {
-			return c.Spinner("working", func() error {
+			return c.Spinner("working", func(_ *nabat.Spinner) error {
 				env, err := nabat.BindAs[string](c, "env")
 				require.NoError(t, err)
 				c.Print(env)
