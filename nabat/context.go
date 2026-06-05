@@ -217,7 +217,7 @@ func (a *App) newContext(cmd *cobra.Command, args []string) (*Context, error) {
 		hasPassthrough:  hasPassthrough,
 		values:          map[string]any{},
 		set:             map[string]bool{},
-		interactive:     a.io.CanPrompt(),
+		interactive:     a.io.IsInteractive(),
 	}
 
 	if err := a.resolveArgs(ctx); err != nil {

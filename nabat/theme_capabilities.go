@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
+	"gopherly.dev/termio/colorprofile"
 
 	"nabat.dev/theme"
 
@@ -28,9 +28,9 @@ import (
 )
 
 // detectCapabilities builds a [theme.Capabilities] snapshot of the
-// rendering surface from an [IOStreams] bundle. Themes branch
-// on the result to pick capability-aware colors, choose the right
-// glamour preset, and back off when the stream is plain text.
+// rendering surface from an [IOStreams] bundle and the pre-detected color
+// profile. Themes branch on the result to pick capability-aware colors,
+// choose the right glamour preset, and back off when the stream is plain text.
 //
 // detectCapabilities lives in the nabat root because it depends on
 // [IOStreams]; the [theme] package is a leaf and must not pull in IO.
@@ -46,7 +46,7 @@ import (
 // Detection defaults are conservative: when a fact cannot be measured
 // reliably (Width, BackgroundHex, Hyperlinks), the framework reports
 // the safer (less-feature) value rather than guessing.
-func detectCapabilities(io *IOStreams) theme.Capabilities {
+func detectCapabilities(io *IOStreams, profile colorprofile.Profile) theme.Capabilities {
 	if io == nil {
 		return theme.Capabilities{
 			Dark:    true,
@@ -55,7 +55,7 @@ func detectCapabilities(io *IOStreams) theme.Capabilities {
 	}
 
 	caps := theme.Capabilities{
-		Profile:       colorProfileFor(io),
+		Profile:       profile,
 		Interactive:   io.IsStdoutTTY(),
 		Dark:          true,
 		Width:         io.TerminalWidth(),
@@ -216,23 +216,4 @@ func detectReducedMotionFromEnv() bool {
 		return true
 	}
 	return false
-}
-
-// colorProfileFor returns the colorprofile.Profile chosen for the
-// IOStreams' primary output. It is exported in spirit (the App builds
-// it once and stores it on the resolved theme) but not on the IOStreams
-// type because the bundle already encodes the same information through
-// [IOStreams.ColorEnabled]; this helper is the minimal escape
-// hatch that lets the theme layer ask "what's the actual profile?".
-//
-// The implementation re-detects against the raw output stream rather
-// than reading a cached field on IOStreams because IOStreams does not
-// expose its outProfile publicly. The cost is one syscall per App.New;
-// caching at the app layer would not be safer (tests often swap the
-// IOStreams entirely).
-func colorProfileFor(io *IOStreams) colorprofile.Profile {
-	if !io.IsStdoutTTY() {
-		return colorprofile.NoTTY
-	}
-	return colorprofile.Detect(io.RawOut(), nil)
 }

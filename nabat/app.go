@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"gopherly.dev/termio"
+	"gopherly.dev/termio/colorprofile"
 
 	"nabat.dev/theme"
 )
@@ -87,7 +90,8 @@ type config struct {
 	// [*ConfigErrors] returned from [New].
 	pendingCommands []*commandReg
 
-	io *IOStreams
+	io         *IOStreams
+	outProfile colorprofile.Profile
 
 	logger *slog.Logger
 
@@ -122,11 +126,14 @@ func defaultConfig() (*config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("nabat: defaultConfig: built-in default theme: %w", err)
 	}
+	env := os.Environ()
+	policy := colorprofile.Detect(os.Stdout, env)
 	return &config{
-		theme:    t,
-		io:       NewSystemIO(),
-		help:     defaultHelpConfig(),
-		rootSpec: &commandSpec{},
+		theme:      t,
+		io:         termio.System(termio.WithColorPolicy(policy)),
+		outProfile: policy.Profile(),
+		help:       defaultHelpConfig(),
+		rootSpec:   &commandSpec{},
 	}, nil
 }
 
@@ -146,7 +153,7 @@ func defaultConfig() (*config, error) {
 //     wrapped with the theme name. Bespoke [theme.Resolver] implementations
 //     have no error channel; their Resolve method must self-handle.
 func (c *config) finalize() error {
-	caps := detectCapabilities(c.io)
+	caps := detectCapabilities(c.io, c.outProfile)
 
 	var resolved theme.ResolvedTheme
 	if c.theme != nil {
@@ -198,7 +205,7 @@ func (c *config) checkThemeRequirements() error {
 		if c.strictThemeRequirements {
 			return fmt.Errorf("nabat: %w", err)
 		}
-		if c.io != nil && c.io.ErrOut != nil {
+		if c.io != nil {
 			//nolint:errcheck // Best-effort warning; a stderr write failure here cannot meaningfully be surfaced.
 			fmt.Fprintf(c.io.ErrOut, "nabat: warning: %v\n", err)
 		}
@@ -459,6 +466,7 @@ func WithIO(s *IOStreams) Option {
 			return fmt.Errorf("%w: WithIO IOStreams cannot be nil", ErrNilOption)
 		}
 		c.io = s
+		c.outProfile = colorprofile.Detect(s.RawOut(), os.Environ()).Profile()
 		return nil
 	})
 }
@@ -538,10 +546,10 @@ type App struct {
 
 	// io is the bundled stdin/stdout/stderr plus terminal capability detection
 	// shared by every [Context] this App produces. Read it via [App.IO]
-	// (`app.IO().Out`, `app.IO().IsStdoutTTY()`, `app.IO().ColorEnabled()`) instead
-	// of touching os.Stdin/Stdout/Stderr directly. Override at construction
-	// with [WithIO].
-	io *IOStreams
+	// (`app.IO().Out`, `app.IO().IsStdoutTTY()`) instead of touching
+	// os.Stdin/Stdout/Stderr directly. Override at construction with [WithIO].
+	io         *IOStreams
+	outProfile colorprofile.Profile
 
 	// registrationFrozen flips to true the first time [App.Run] / [App.RunArgs]
 	// fires. Once set, [App.Command] and [Command.Command] reject further
@@ -857,10 +865,11 @@ func New(name string, opts ...Option) (*App, error) {
 	}
 
 	app := &App{
-		cfg:  cfg,
-		root: root,
-		meta: make(map[*cobra.Command]*commandSpec),
-		io:   cfg.io,
+		cfg:        cfg,
+		root:       root,
+		meta:       make(map[*cobra.Command]*commandSpec),
+		io:         cfg.io,
+		outProfile: cfg.outProfile,
 	}
 	app.addMeta(root, rootSpec)
 

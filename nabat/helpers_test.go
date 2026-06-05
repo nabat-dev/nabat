@@ -31,7 +31,10 @@ import (
 // separate stdout and stderr buffers reveal stream-routing bugs that a
 // merged buffer would hide.
 func testIO() (*IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
-	return newTestIO()
+	in := &bytes.Buffer{}
+	out := &bytes.Buffer{}
+	errOut := &bytes.Buffer{}
+	return NewIO(in, out, errOut), in, out, errOut
 }
 
 // runConfig holds optional knobs for [Run]. Fields are populated by

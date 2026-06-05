@@ -74,7 +74,7 @@ func TestNewTTYIO_reportsAsTTY(t *testing.T) {
 	assert.True(t, ios.IsStdinTTY())
 	assert.True(t, ios.IsStdoutTTY())
 	assert.True(t, ios.IsStderrTTY())
-	assert.True(t, ios.CanPrompt())
+	assert.True(t, ios.IsInteractive())
 }
 
 func TestNewIO_defaultsToNonTTY(t *testing.T) {
@@ -84,5 +84,5 @@ func TestNewIO_defaultsToNonTTY(t *testing.T) {
 	assert.False(t, ios.IsStdinTTY())
 	assert.False(t, ios.IsStdoutTTY())
 	assert.False(t, ios.IsStderrTTY())
-	assert.False(t, ios.CanPrompt())
+	assert.False(t, ios.IsInteractive())
 }
