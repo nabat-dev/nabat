@@ -106,4 +106,5 @@ func TestNewIO_defaultsToNonTTY(t *testing.T) {
 	assert.False(t, s.IsStderrTTY())
 	assert.False(t, s.IsInteractive())
 	assert.Equal(t, nabat.DefaultWidth, s.TerminalWidth())
+	assert.Equal(t, nabat.DefaultHeight, s.TerminalHeight())
 }

@@ -37,6 +37,10 @@ type IOStreams = termio.Streams
 // stream is not a terminal or its size cannot be determined.
 const DefaultWidth = termio.DefaultWidth
 
+// DefaultHeight is the terminal row count assumed when the underlying
+// stream is not a terminal or its size cannot be determined.
+const DefaultHeight = termio.DefaultHeight
+
 // NewSystemIO returns an IOStreams backed by [os.Stdin], [os.Stdout], and
 // [os.Stderr]. Color profile and TTY status are detected against the real
 // file descriptors and the process environment.
