@@ -139,6 +139,66 @@
 // instructional text. [WithOptionsFunc] provides dynamic select choices.
 // [WithFormAccessible] enables screen-reader-friendly mode.
 //
+// # Spinner
+//
+// [Context.Spinner] shows a single animated line while work happens. It is the
+// right choice when you need "working" feedback without tracking individual
+// items. Pass [WithSpinnerType] to change the animation preset.
+//
+//	err := c.Spinner("Deploying...", func(sp *nabat.Spinner) error {
+//	    sp.SetText("Building image...")
+//	    time.Sleep(800 * time.Millisecond)
+//	    sp.SetText("Rolling out pods...")
+//	    return nil
+//	})
+//
+// [Spinner.SetText] updates the header title while the work runs. On
+// completion the header shows a check icon on success and an x on error.
+//
+// # Status display
+//
+// [Context.Status] shows a multi-row live display where each row represents
+// a keyed item. Every row has its own spinner animation and elapsed timer.
+// Use it for batch work where each item needs its own status.
+//
+//	err := c.Status(func(st *nabat.Status) error {
+//	    for _, m := range migrations {
+//	        row := st.Row(m.Version).Label(m.Name).Set("Applying")
+//	        if err := run(ctx, m); err != nil {
+//	            row.Set(err.Error()).Error()
+//	            return err
+//	        }
+//	        row.Set("Applied").Success()
+//	    }
+//	    return nil
+//	},
+//	    nabat.WithTitle("Running migrations"),
+//	    nabat.WithColumns("MIGRATION", "STATUS"),
+//	)
+//
+// The key passed to [Status.Row] identifies the row for dedup and is never
+// shown in the display. Call [StatusRow.Label] to set the visible first column.
+// Call a state method ([StatusRow.Success], [StatusRow.Error],
+// [StatusRow.Warn], or [StatusRow.Done]) to freeze the timer and set a final
+// icon. All row methods are chainable and goroutine-safe.
+//
+// [StatusRow.Priority] controls display order: lower numbers appear first,
+// unprioritized rows follow in insertion order. [StatusRow.Hide] and
+// [StatusRow.Show] toggle visibility without removing the row from the dedup
+// map. [StatusRow.Active] reactivates a row, resumes its timer, and shows it
+// if hidden. [StatusRow.Icon] overrides the icon for a single row regardless
+// of state.
+//
+// Use [WithTitle] to show an optional header line above the rows. The header
+// icon is derived from the fn return value unless overridden by
+// [Status.SetCompletion]. Use [WithColumns] to show column header labels
+// (an "AGE" header is auto-appended for the elapsed column unless
+// [WithoutElapsed] is also set). Use [WithStatusIcons] to change the
+// state-derived icon symbols for the whole display.
+//
+// [WithSpinnerType] and [WithSpinnerIcons] can be passed to both
+// [Context.Spinner] and [Context.Status].
+//
 // # Examples
 //
 // See the examples/ directory for complete programs. Runnable godoc examples are

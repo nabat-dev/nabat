@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,10 +28,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// SpinnerType selects spinner frames for [WithSpinnerType] and [Context.Spinner].
+// SpinnerType selects spinner frames for [WithSpinnerType], [Context.Spinner],
+// and [Context.Status].
 type SpinnerType spinner.Spinner
 
-// Spinner presets for use with [WithSpinnerType] and [Context.Spinner].
+// Spinner presets for use with [WithSpinnerType].
 // These are aliases for charm.land/bubbles/v2/spinner types, so callers do
 // not need to import the spinner package directly.
 //
@@ -55,7 +55,7 @@ type SpinnerType spinner.Spinner
 func SpinnerLine() SpinnerType { return SpinnerType(spinner.Line) }
 
 // SpinnerDots returns the Braille-dot spinner preset (default for
-// [Context.Spinner]).
+// [Context.Spinner] and [Context.Status]).
 func SpinnerDots() SpinnerType { return SpinnerType(spinner.Dot) }
 
 // SpinnerMiniDot returns the single-Braille-dot spinner preset.
@@ -88,58 +88,85 @@ func SpinnerHamburger() SpinnerType { return SpinnerType(spinner.Hamburger) }
 // SpinnerEllipsis returns the animated-ellipsis spinner preset (., .., ...).
 func SpinnerEllipsis() SpinnerType { return SpinnerType(spinner.Ellipsis) }
 
+// SpinnerOption configures [Context.Spinner].
+type SpinnerOption interface {
+	applySpinner(*spinnerConfig) error
+}
+
+// StatusOption configures [Context.Status].
+type StatusOption interface {
+	applyStatus(*statusConfig) error
+}
+
+// spinnerStatusOption satisfies both [SpinnerOption] and [StatusOption].
+// Returned by [WithSpinnerType] and [WithSpinnerIcons] so those options can
+// be passed to either [Context.Spinner] or [Context.Status].
+type spinnerStatusOption interface {
+	SpinnerOption
+	StatusOption
+}
+
+// sharedOption is the concrete type behind [spinnerStatusOption].
+type sharedOption struct {
+	spinnerFn func(*spinnerConfig) error
+	statusFn  func(*statusConfig) error
+}
+
+func (o sharedOption) applySpinner(c *spinnerConfig) error { return o.spinnerFn(c) }
+func (o sharedOption) applyStatus(c *statusConfig) error   { return o.statusFn(c) }
+
+// statusOnlyOption wraps a status-specific function as a [StatusOption].
+type statusOnlyOption func(*statusConfig) error
+
+func (f statusOnlyOption) applyStatus(c *statusConfig) error { return f(c) }
+
 type spinnerConfig struct {
 	spinnerType SpinnerType
 	icons       Icons
 }
 
-// SpinnerOption configures [Context.Spinner].
-type SpinnerOption func(*spinnerConfig) error
-
-// WithSpinnerType sets the spinner animation preset.
+// WithSpinnerType sets the spinner animation preset. This option can be passed
+// to both [Context.Spinner] and [Context.Status].
 //
 // Example:
 //
-//	c.Spinner("Deploying", func(sp *nabat.Spinner) error {
-//		return deploy()
-//	}, WithSpinnerType(SpinnerDots()))
-func WithSpinnerType(t SpinnerType) SpinnerOption {
-	return func(c *spinnerConfig) error {
-		c.spinnerType = t
-		return nil
+//	c.Spinner("Deploying", fn, WithSpinnerType(SpinnerDots()))
+//	c.Status(fn, WithTitle("Deploying"), WithSpinnerType(SpinnerDots()))
+func WithSpinnerType(t SpinnerType) spinnerStatusOption {
+	return sharedOption{
+		spinnerFn: func(c *spinnerConfig) error { c.spinnerType = t; return nil },
+		statusFn:  func(c *statusConfig) error { c.spinnerType = t; return nil },
 	}
 }
 
-// WithSpinnerIcons overrides the default row state icons for a [Context.Spinner]
-// call. Only the non-empty fields in icons are used; empty fields keep their
-// built-in defaults ("✓", "✗", "!", "•").
+// WithSpinnerIcons overrides the default row state icons. Only the non-empty
+// fields in icons are used; empty fields keep their built-in defaults
+// ("✓", "✗", "!", "•"). This option can be passed to both [Context.Spinner]
+// and [Context.Status].
 //
 // Example:
 //
-//	c.Spinner("Deploying", fn, nabat.WithSpinnerIcons(nabat.Icons{
+//	c.Spinner("Deploying", fn, WithSpinnerIcons(Icons{
 //	    Success: "+",
 //	    Error:   "x",
 //	}))
-func WithSpinnerIcons(icons Icons) SpinnerOption {
-	return func(c *spinnerConfig) error {
-		c.icons = icons
-		return nil
+func WithSpinnerIcons(icons Icons) spinnerStatusOption {
+	return sharedOption{
+		spinnerFn: func(c *spinnerConfig) error { c.icons = icons; return nil },
+		statusFn:  func(c *statusConfig) error { c.icons = icons; return nil },
 	}
 }
 
 // Spinner is the live handle passed to the [Context.Spinner] callback. Call
-// [Spinner.SetText] to update the header title. Call [Spinner.Row] to add or
-// update a keyed status row beneath the header.
+// [Spinner.SetText] to update the animated header title.
 //
-// See also [ProgressBar] for step-based progress reporting.
+// For multi-row live displays use [Context.Status] instead.
 type Spinner struct {
-	mu     sync.Mutex
-	text   string
-	rows   []*SpinnerRow          // insertion-ordered
-	rowIdx map[string]*SpinnerRow // key -> row
-	icons  Icons
-	th     theme.ResolvedTheme
-	start  time.Time
+	mu    sync.Mutex
+	text  string
+	icons Icons
+	th    theme.ResolvedTheme
+	start time.Time
 }
 
 // SetText replaces the spinner header title. It is safe to call from any
@@ -157,123 +184,26 @@ func (s *Spinner) title() string {
 	return s.text
 }
 
-// Row returns the keyed row for key, creating it on first call and returning
-// the same row on every subsequent call. Rows are displayed beneath the header
-// in creation order. Row is safe to call from any goroutine.
-//
-// Example:
-//
-//	row := sp.Row("pod/api-abc")
-//	row.Set("Scheduled", "assigned to node-3")
-//	// ... later ...
-//	row.Success()
-func (s *Spinner) Row(key string) *SpinnerRow {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if r, ok := s.rowIdx[key]; ok {
-		return r
-	}
-	if s.rowIdx == nil {
-		s.rowIdx = make(map[string]*SpinnerRow)
-	}
-	r := &SpinnerRow{
-		key:     key,
-		created: time.Now(),
-	}
-	s.rows = append(s.rows, r)
-	s.rowIdx[key] = r
-	return r
-}
-
-// rowSnapshots returns point-in-time copies of all rows in insertion order.
-func (s *Spinner) rowSnapshots() []rowSnapshot {
-	s.mu.Lock()
-	rows := append([]*SpinnerRow(nil), s.rows...)
-	s.mu.Unlock()
-	snaps := make([]rowSnapshot, 0, len(rows))
-	for _, r := range rows {
-		snaps = append(snaps, r.snapshot())
-	}
-	return snaps
-}
-
 // completionState determines the header icon after the work function returns.
-// It returns [RowError] when fnErr is non-nil or any row is in [RowError]
-// state, [RowWarning] when any row is in [RowWarning] state, and [RowSuccess]
-// otherwise.
+// Returns [RowError] when fnErr is non-nil, [RowSuccess] otherwise.
 func (s *Spinner) completionState(fnErr error) RowState {
 	if fnErr != nil {
 		return RowError
 	}
-	s.mu.Lock()
-	rows := append([]*SpinnerRow(nil), s.rows...)
-	s.mu.Unlock()
-	hasWarn := false
-	for _, r := range rows {
-		r.mu.Lock()
-		st := r.state
-		r.mu.Unlock()
-		if st == RowError {
-			return RowError
-		}
-		if st == RowWarning {
-			hasWarn = true
-		}
-	}
-	if hasWarn {
-		return RowWarning
-	}
 	return RowSuccess
 }
 
-// renderPlainTable returns an aligned plain-text table of all rows with no
-// ANSI styling. It is used by the non-TTY fallback path.
-func (s *Spinner) renderPlainTable() string {
-	snaps := s.rowSnapshots()
-	if len(snaps) == 0 {
-		return ""
-	}
-	widths := computeColumnWidths(snaps)
-	var sb strings.Builder
-	for _, snap := range snaps {
-		icon := staticIcon(snap.state, s.icons)
-		sb.WriteString(" ")
-		sb.WriteString(icon)
-		sb.WriteString("  ")
-		cols := rowColumns(snap)
-		for i, col := range cols {
-			w := 0
-			if i < len(widths) {
-				w = widths[i]
-			}
-			sb.WriteString(padRight(col, w))
-			if i < len(cols)-1 {
-				sb.WriteString("  ")
-			}
-		}
-		sb.WriteString("\n")
-	}
-	return sb.String()
-}
-
-// Spinner runs fn while showing an animated spinner on stderr in interactive
-// terminals. The callback receives a [*Spinner] handle; call [Spinner.SetText]
-// to update the header title and [Spinner.Row] to add or update keyed status
-// rows beneath it.
-//
-// When no rows are added, the display is a single animated line (the original
-// behavior). When rows are added each row shows its own spinner animation and
-// an auto-incrementing elapsed timer; calling [SpinnerRow.Success],
-// [SpinnerRow.Error], [SpinnerRow.Warn], or [SpinnerRow.Done] freezes the
-// timer and replaces the row's spinner with a static icon.
+// Spinner runs fn while showing an animated single-line spinner on stderr in
+// interactive terminals. The callback receives a [*Spinner] handle; call
+// [Spinner.SetText] to update the header title while the work runs.
 //
 // On completion the final state persists as static text in the terminal
-// scrollback. The header icon is derived automatically from the work result
-// and from any row error states.
+// scrollback. The header icon is "✓" on success and "✗" on error.
 //
 // When stderr is not a terminal, the title is printed once as a plain line and
-// fn runs without animation. If rows were added, their final state is printed
-// as a plain-text aligned table after fn returns.
+// fn runs without animation.
+//
+// For multi-row live status displays use [Context.Status] instead.
 //
 // Errors:
 //   - any error returned by fn
@@ -288,7 +218,7 @@ func (c *Context) Spinner(title string, fn func(*Spinner) error, opts ...Spinner
 			errs.AddErr(fmtErrInvalidOption("spinner option", i))
 			continue
 		}
-		if err := opt(cfg); err != nil {
+		if err := opt.applySpinner(cfg); err != nil {
 			errs.AddErr(err)
 		}
 	}
@@ -303,20 +233,14 @@ func (c *Context) Spinner(title string, fn func(*Spinner) error, opts ...Spinner
 		start: time.Now(),
 	}
 
-	// Non-TTY: print title once then run fn; append final row table if any.
+	// Non-TTY path: print title and run fn with no animation.
 	if !c.io.IsStderrTTY() {
 		if title != "" {
 			if _, err := fmt.Fprintln(c.io.ErrOut, title); err != nil {
 				return err
 			}
 		}
-		fnErr := fn(handle)
-		if table := handle.renderPlainTable(); table != "" {
-			if _, wErr := fmt.Fprint(c.io.ErrOut, table); wErr != nil && fnErr == nil {
-				return wErr
-			}
-		}
-		return fnErr
+		return fn(handle)
 	}
 
 	rt := c.app.Theme()

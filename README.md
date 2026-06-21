@@ -38,6 +38,8 @@
   - [Semantic Output](#semantic-output)
   - [Structured Output](#structured-output)
   - [Interactive Output](#interactive-output)
+    - [Spinner](#spinner)
+    - [Status](#status)
   - [Help](#help)
   - [Version](#version)
   - [Shell Completion](#shell-completion)
@@ -102,7 +104,7 @@ Read more in the [Brand Story](#brand-story).
 - **Shell completion.** Bash, Zsh, Fish, PowerShell – one line: `WithCompletion()`.
 - **Semantic output.** `c.Success`, `c.Warn`, `c.Error`, `c.Info` -- each goes to the right stream and uses the theme.
 - **Structured output.** `c.Table`, `c.List`, `c.Tree`, `c.JSON`, `c.YAML`, `c.TOML`, `c.Encode`, `c.Highlight`, `c.Markdown`, `c.ProgressBar`.
-- **Interactive layer.** `c.Spinner`, `c.Confirm`, `c.Form` -- all built on [Huh](https://pkg.go.dev/charm.land/huh/v2) (`charm.land/huh/v2`). The spinner supports live keyed rows with per-row timers and theme-driven state icons.
+- **Interactive layer.** `c.Spinner` (single-line animation), `c.Status` (multi-row live display with labels, priority sorting, column headers, and per-row icons), `c.Confirm`, and `c.Form` -- all built on [Huh](https://pkg.go.dev/charm.land/huh/v2) (`charm.land/huh/v2`).
 - **Twelve built-in themes.** Popular light and dark palettes (including Catppuccin, Dracula, Gruvbox, Nord, and Solarized) plus the Nabat brand theme. You can change one token at a time or bring a full custom theme.
 - **Pipe-friendly by default.** Honors `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`, and TTY detection.
 - **Fail fast.** Setup errors come back together as one `*ConfigErrors` from `New`.
@@ -735,100 +737,133 @@ bar.Done()
 
 ### Interactive Output
 
-**Spinner** -- show a spinner while work happens:
+#### Spinner
+
+`c.Spinner` shows a single animated line while work happens. It is the right
+choice when you need "working" feedback without tracking individual items.
 
 ```go
-err := c.Spinner("Deploying...", func(_ *nabat.Spinner) error {
-    time.Sleep(2 * time.Second)
+err := c.Spinner("Connecting to cluster...", func(sp *nabat.Spinner) error {
+    time.Sleep(500 * time.Millisecond)
+    sp.SetText("Building image...")
+    time.Sleep(800 * time.Millisecond)
+    sp.SetText("Rolling out pods...")
     return nil
 }, nabat.WithSpinnerType(nabat.SpinnerDots()))
 ```
 
-**Spinner with live rows** -- add keyed status rows beneath the header so each
-item in a batch shows its own state, elapsed timer, and icon.
+`SetText` updates the header title while the work runs. The header shows a
+check icon on success and an x on error when done.
 
-Sequential work (database migrations):
+In non-TTY environments (CI, piped output) the title is printed once as a
+plain line and fn runs without animation.
+
+#### Status
+
+`c.Status` shows a multi-row live display where each row represents a keyed
+item. Every row has its own spinner animation and elapsed timer. Use it for
+batch work where each item needs its own status.
+
+Basic usage:
 
 ```go
-err := c.Spinner("Running migrations", func(sp *nabat.Spinner) error {
-    for _, m := range pending {
-        row := sp.Row(m.Version)
-        row.Set(m.Name, "Applying")
-
-        if err := migrator.Apply(ctx, m); err != nil {
-            row.Set(m.Name, err.Error()).Error()
-            return fmt.Errorf("migration %s: %w", m.Version, err)
+err := c.Status(func(st *nabat.Status) error {
+    for _, m := range migrations {
+        row := st.Row(m.Version).Label(m.Name).Set("Applying")
+        if err := run(m); err != nil {
+            row.Set(err.Error()).Error()
+            return err
         }
-        row.Set(m.Name, "Applied").Success()
+        row.Set("Applied").Success()
     }
     return nil
-})
+},
+    nabat.WithTitle("Running migrations"),
+    nabat.WithColumns("MIGRATION", "STATUS"),
+)
 ```
 
-Parallel work (file uploads):
+The key passed to `Row` identifies the row for dedup and updates; it is never
+shown in the display. Use `Label` to set the visible first column:
 
 ```go
-err := c.Spinner("Uploading assets", func(sp *nabat.Spinner) error {
-    g, ctx := errgroup.WithContext(ctx)
-    g.SetLimit(4)
-
-    for _, f := range files {
-        g.Go(func() error {
-            row := sp.Row(f.Name)
-            row.Set(humanize.Bytes(uint64(f.Size)), "Uploading")
-
-            if err := storage.Upload(ctx, f); err != nil {
-                row.Set(humanize.Bytes(uint64(f.Size)), err.Error()).Error()
-                return err
-            }
-            row.Set(humanize.Bytes(uint64(f.Size)), "Uploaded").Success()
-            return nil
-        })
-    }
-    return g.Wait()
-})
+row := st.Row(string(ev.UID)).Label(ev.Object)
 ```
 
-Each row has its own spinner animation and elapsed timer. Call a state method
-to mark completion:
+Call a state method to stop the timer and set a final icon:
 
-- `.Success()` -- check icon, stops the timer
-- `.Error()` -- x icon, stops the timer
-- `.Warn()` -- warning icon, stops the timer
-- `.Done()` -- neutral dot, stops the timer
+- `.Success()` -- check icon, freezes the timer
+- `.Error()` -- x icon, freezes the timer
+- `.Warn()` -- warning icon, freezes the timer
+- `.Done()` -- neutral dot, freezes the timer
 
-Column widths align automatically by visible character width. ANSI escape codes
-in cell text do not affect alignment. When there are more rows than the terminal
-can show, errors and active rows appear first, followed by a summary of hidden
-completed rows.
-
-In non-TTY environments (CI, piped output), the final state prints once as a
-plain-text table after the work function returns.
-
-`Row` and `SetText` are safe to call from multiple goroutines.
-
-Simple use without rows works the same as before. `SetText` updates the header
-title during work:
+Row methods are chainable and safe to call from multiple goroutines:
 
 ```go
-err := c.Spinner("Connecting...", func(sp *nabat.Spinner) error {
-    sp.SetText("Authenticating...")
-    // ...
-    sp.SetText("Loading config...")
-    return nil
-})
+row.Label("pod/api").Set("Running", "healthy").Style(theme.TextMuted).Success()
 ```
 
-Override the default icons ("checkmark", "x", "!", "dot") for a single call:
+**Priority sorting** -- control display order by assigning a priority number.
+Lower numbers appear first. Rows without a priority follow in insertion order:
 
 ```go
-err := c.Spinner("Deploying", fn,
+st.Row("high").Priority(1).Set("critical path")
+st.Row("low").Priority(10).Set("background task")
+st.Row("unranked").Set("no priority")
+```
+
+**Hide and Show** -- remove a row from the display without losing it:
+
+```go
+row.Hide()                // remove from display; timer freezes
+row.Show()                // make visible again (state unchanged)
+row.Active()              // reactivate: shows if hidden, resumes timer
+```
+
+**Icon override** -- replace the state-derived icon for a single row:
+
+```go
+row.Icon("?").Warn()      // show "?" instead of "!"
+row.Icon("").Warn()       // clear override; use state default
+```
+
+**Column headers** -- label the columns above the rows:
+
+```go
+c.Status(fn,
+    nabat.WithColumns("OBJECT", "REASON", "MESSAGE"),
+)
+// Output appends an "AGE" header for the elapsed column automatically.
+```
+
+Use `WithoutElapsed()` to suppress the time column and its header.
+
+**Caller-controlled completion icon** -- set the header icon independently of
+the fn return value:
+
+```go
+st.SetCompletion(nabat.RowWarning) // header shows warning icon even if fn returns nil
+```
+
+**Non-TTY behavior** -- in non-TTY environments (CI, piped output) the title
+(if set) is printed once as a plain line and the final row state prints as an
+aligned plain-text table after fn returns. Column headers appear in both TTY
+and non-TTY output.
+
+**Option sharing** -- `WithSpinnerType` and `WithSpinnerIcons` work with both
+`c.Spinner` and `c.Status`:
+
+```go
+c.Status(fn,
+    nabat.WithTitle("Deploying"),
+    nabat.WithSpinnerType(nabat.SpinnerMoon()),
     nabat.WithSpinnerIcons(nabat.Icons{Success: "+", Error: "x"}),
 )
 ```
 
-See [examples/spinnerrows](examples/spinnerrows/main.go) for runnable demos
-(health checks, parallel uploads, sequential migrations, header-only updates).
+See [examples/status](examples/status/main.go) for runnable demos
+(sequential migrations, parallel uploads with priority sorting, health checks
+with icon overrides, Kubernetes event feed, header-only Spinner).
 
 **Confirm** -- ask a yes/no question:
 
@@ -1321,7 +1356,7 @@ Test run options:
 | `nabattest.WithContext(ctx)` | Set a custom context.                      |
 | `nabattest.WithEnvVars(map)` | Set env vars for the run (restored after). |
 
-Use `nabattest.NewTTYIO()` instead of `nabattest.NewIO()` when the code under test uses prompts, spinners, `c.IsInteractive()`, or any other code path that checks whether streams are terminals. `NewTTYIO()` marks all three streams as TTY; `NewIO()` marks them as non-TTY (the safe default for most tests).
+Use `nabattest.NewTTYIO()` instead of `nabattest.NewIO()` when the code under test uses prompts, spinners, Status displays, `c.IsInteractive()`, or any other code path that checks whether streams are terminals. `NewTTYIO()` marks all three streams as TTY; `NewIO()` marks them as non-TTY (the safe default for most tests).
 
 For parallel tests, use `nabattest.RunParallel` instead of `nabattest.Run`.
 Note: `WithEnvVars` is not allowed with `RunParallel`.
@@ -1338,7 +1373,7 @@ Two runnable programs live in [`examples/`](examples/):
 | [`examples/basic`](examples/basic/main.go)           | Single subcommand, one positional arg, prompt fallback, version, completion, manpage, list output.               |
 | [`examples/deployctl`](examples/deployctl/main.go)   | Typed args, persistent flags, env-var resolution, themed output, structured logging, spinner, table, tree, JSON. |
 | [`examples/theme`](examples/theme/main.go)           | `NABAT_THEME` env var, all semantic and structured output types -- designed for the theme showcase demo.          |
-| [`examples/spinnerrows`](examples/spinnerrows/main.go) | Spinner live rows: sequential migrations, parallel uploads, health checks, header-only updates.                |
+| [`examples/status`](examples/status/main.go)           | Status live display: sequential migrations, parallel uploads with priority, health checks, Kubernetes event feed, header-only Spinner. |
 
 Run them:
 
@@ -1381,7 +1416,7 @@ block-beta
     block:output["Output and Interaction"]
         semantic["Semantic: Success, Warn, Error, Info"]
         structured["Structured: Table, List, Tree, JSON, YAML, TOML"]
-        interactive["Interactive: Spinner, Confirm, Form, ProgressBar"]
+        interactive["Interactive: Spinner, Status, Confirm, Form, ProgressBar"]
     end
     block:config["Config, Command, and Resolution"]
         appConfig["App config (functional options)"]
