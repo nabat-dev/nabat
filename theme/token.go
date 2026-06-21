@@ -87,6 +87,11 @@ const (
 	// TreeItem styles tree item text.
 	TreeItem Token = "tree.item"
 
-	// TreeEnumerator styles tree enumerator markers (├──, └──, …).
+	// TreeEnumerator styles tree enumerator markers (├──, └──, ...).
 	TreeEnumerator Token = "tree.enumerator"
+
+	// SpinnerActive styles the animated spinner icon shown next to active
+	// rows in a live [Spinner] display. Themes that do not set this token
+	// fall through to [StatusInfo] via [DefaultAliases].
+	SpinnerActive Token = "spinner.active"
 )

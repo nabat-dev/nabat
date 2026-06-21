@@ -51,6 +51,11 @@ var DefaultAliases = map[Token]Token{
 	TreeItem:    TextPrimary,
 	TableCell:   TextPrimary,
 	TableHeader: TextTitle,
+
+	// SpinnerActive falls through to StatusInfo so the per-row spinner
+	// icon matches the header spinner color in themes that do not
+	// customize it explicitly.
+	SpinnerActive: StatusInfo,
 }
 
 // validateAliasChain walks the chain from t through aliases, ensuring

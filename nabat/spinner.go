@@ -18,10 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
-	"charm.land/lipgloss/v2"
 
 	"nabat.dev/theme"
 
@@ -89,6 +90,7 @@ func SpinnerEllipsis() SpinnerType { return SpinnerType(spinner.Ellipsis) }
 
 type spinnerConfig struct {
 	spinnerType SpinnerType
+	icons       Icons
 }
 
 // SpinnerOption configures [Context.Spinner].
@@ -108,17 +110,41 @@ func WithSpinnerType(t SpinnerType) SpinnerOption {
 	}
 }
 
-// Spinner is the live handle passed to the [Context.Spinner] callback.
-// Call [Spinner.SetText] to replace the spinner title during execution.
-// See also [ProgressBar] for step-based progress reporting.
-type Spinner struct {
-	mu   sync.Mutex
-	text string
+// WithSpinnerIcons overrides the default row state icons for a [Context.Spinner]
+// call. Only the non-empty fields in icons are used; empty fields keep their
+// built-in defaults ("✓", "✗", "!", "•").
+//
+// Example:
+//
+//	c.Spinner("Deploying", fn, nabat.WithSpinnerIcons(nabat.Icons{
+//	    Success: "+",
+//	    Error:   "x",
+//	}))
+func WithSpinnerIcons(icons Icons) SpinnerOption {
+	return func(c *spinnerConfig) error {
+		c.icons = icons
+		return nil
+	}
 }
 
-// SetText replaces the entire spinner title. It is safe to call from any
-// goroutine; the last writer wins. A call after the work function returns
-// is a harmless no-op.
+// Spinner is the live handle passed to the [Context.Spinner] callback. Call
+// [Spinner.SetText] to update the header title. Call [Spinner.Row] to add or
+// update a keyed status row beneath the header.
+//
+// See also [ProgressBar] for step-based progress reporting.
+type Spinner struct {
+	mu     sync.Mutex
+	text   string
+	rows   []*SpinnerRow          // insertion-ordered
+	rowIdx map[string]*SpinnerRow // key -> row
+	icons  Icons
+	th     theme.ResolvedTheme
+	start  time.Time
+}
+
+// SetText replaces the spinner header title. It is safe to call from any
+// goroutine; the last writer wins. A call after the work function returns is a
+// harmless no-op.
 func (s *Spinner) SetText(text string) {
 	s.mu.Lock()
 	s.text = text
@@ -131,60 +157,123 @@ func (s *Spinner) title() string {
 	return s.text
 }
 
-// spinnerDoneMsg carries the result of the worker function back to the
-// Bubble Tea event loop.
-type spinnerDoneMsg struct{ err error }
-
-// spinnerModel is the owned Bubble Tea model. It wraps a bubbles spinner,
-// reads the current title from the handle each View(), and dispatches the
-// worker in Init so the tea event loop drives animation concurrently.
-type spinnerModel struct {
-	spin       spinner.Model
-	handle     *Spinner
-	titleStyle lipgloss.Style
-	action     func(*Spinner) error
-	err        error
+// Row returns the keyed row for key, creating it on first call and returning
+// the same row on every subsequent call. Rows are displayed beneath the header
+// in creation order. Row is safe to call from any goroutine.
+//
+// Example:
+//
+//	row := sp.Row("pod/api-abc")
+//	row.Set("Scheduled", "assigned to node-3")
+//	// ... later ...
+//	row.Success()
+func (s *Spinner) Row(key string) *SpinnerRow {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r, ok := s.rowIdx[key]; ok {
+		return r
+	}
+	if s.rowIdx == nil {
+		s.rowIdx = make(map[string]*SpinnerRow)
+	}
+	r := &SpinnerRow{
+		key:     key,
+		created: time.Now(),
+	}
+	s.rows = append(s.rows, r)
+	s.rowIdx[key] = r
+	return r
 }
 
-func (m spinnerModel) Init() tea.Cmd {
-	return tea.Batch(
-		m.spin.Tick,
-		func() tea.Msg { return spinnerDoneMsg{err: m.action(m.handle)} },
-	)
+// rowSnapshots returns point-in-time copies of all rows in insertion order.
+func (s *Spinner) rowSnapshots() []rowSnapshot {
+	s.mu.Lock()
+	rows := append([]*SpinnerRow(nil), s.rows...)
+	s.mu.Unlock()
+	snaps := make([]rowSnapshot, 0, len(rows))
+	for _, r := range rows {
+		snaps = append(snaps, r.snapshot())
+	}
+	return snaps
 }
 
-func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case spinnerDoneMsg:
-		m.err = msg.err
-		return m, tea.Quit
-	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
-			return m, tea.Interrupt
+// completionState determines the header icon after the work function returns.
+// It returns [RowError] when fnErr is non-nil or any row is in [RowError]
+// state, [RowWarning] when any row is in [RowWarning] state, and [RowSuccess]
+// otherwise.
+func (s *Spinner) completionState(fnErr error) RowState {
+	if fnErr != nil {
+		return RowError
+	}
+	s.mu.Lock()
+	rows := append([]*SpinnerRow(nil), s.rows...)
+	s.mu.Unlock()
+	hasWarn := false
+	for _, r := range rows {
+		r.mu.Lock()
+		st := r.state
+		r.mu.Unlock()
+		if st == RowError {
+			return RowError
+		}
+		if st == RowWarning {
+			hasWarn = true
 		}
 	}
-	var cmd tea.Cmd
-	m.spin, cmd = m.spin.Update(msg)
-	return m, cmd
-}
-
-func (m spinnerModel) View() tea.View {
-	out := m.spin.View()
-	if t := m.handle.title(); t != "" {
-		out += m.titleStyle.Render(t)
+	if hasWarn {
+		return RowWarning
 	}
-	return tea.NewView(out)
+	return RowSuccess
 }
 
-// Spinner runs fn while showing a spinner on stderr in interactive terminals.
-// The callback receives a [*Spinner] handle; call [Spinner.SetText] to update
-// the title live. Callers that do not need updates ignore the handle:
+// renderPlainTable returns an aligned plain-text table of all rows with no
+// ANSI styling. It is used by the non-TTY fallback path.
+func (s *Spinner) renderPlainTable() string {
+	snaps := s.rowSnapshots()
+	if len(snaps) == 0 {
+		return ""
+	}
+	widths := computeColumnWidths(snaps)
+	var sb strings.Builder
+	for _, snap := range snaps {
+		icon := staticIcon(snap.state, s.icons)
+		sb.WriteString(" ")
+		sb.WriteString(icon)
+		sb.WriteString("  ")
+		cols := rowColumns(snap)
+		for i, col := range cols {
+			w := 0
+			if i < len(widths) {
+				w = widths[i]
+			}
+			sb.WriteString(padRight(col, w))
+			if i < len(cols)-1 {
+				sb.WriteString("  ")
+			}
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+// Spinner runs fn while showing an animated spinner on stderr in interactive
+// terminals. The callback receives a [*Spinner] handle; call [Spinner.SetText]
+// to update the header title and [Spinner.Row] to add or update keyed status
+// rows beneath it.
 //
-//	c.Spinner("Loading", func(_ *nabat.Spinner) error { return load() })
+// When no rows are added, the display is a single animated line (the original
+// behavior). When rows are added each row shows its own spinner animation and
+// an auto-incrementing elapsed timer; calling [SpinnerRow.Success],
+// [SpinnerRow.Error], [SpinnerRow.Warn], or [SpinnerRow.Done] freezes the
+// timer and replaces the row's spinner with a static icon.
+//
+// On completion the final state persists as static text in the terminal
+// scrollback. The header icon is derived automatically from the work result
+// and from any row error states.
 //
 // When stderr is not a terminal, the title is printed once as a plain line and
-// fn runs without animation; [Spinner.SetText] calls are no-ops in that path.
-// On finish the spinner line is cleared automatically.
+// fn runs without animation. If rows were added, their final state is printed
+// as a plain-text aligned table after fn returns.
 //
 // Errors:
 //   - any error returned by fn
@@ -207,28 +296,43 @@ func (c *Context) Spinner(title string, fn func(*Spinner) error, opts ...Spinner
 		return &errs
 	}
 
-	handle := &Spinner{text: title}
+	handle := &Spinner{
+		text:  title,
+		icons: cfg.icons,
+		th:    c.app.Theme(),
+		start: time.Now(),
+	}
 
-	// Non-TTY: skip animation; print the title once as a log breadcrumb.
+	// Non-TTY: print title once then run fn; append final row table if any.
 	if !c.io.IsStderrTTY() {
 		if title != "" {
 			if _, err := fmt.Fprintln(c.io.ErrOut, title); err != nil {
 				return err
 			}
 		}
-		return fn(handle)
+		fnErr := fn(handle)
+		if table := handle.renderPlainTable(); table != "" {
+			if _, wErr := fmt.Fprint(c.io.ErrOut, table); wErr != nil && fnErr == nil {
+				return wErr
+			}
+		}
+		return fnErr
 	}
 
-	info := c.app.Theme().Style(theme.StatusInfo)
-	model := spinnerModel{
-		spin: spinner.New(
+	rt := c.app.Theme()
+	info := rt.Style(theme.StatusInfo)
+	activeStyle := rt.Style(theme.SpinnerActive)
+	model := newSpinnerModel(
+		spinner.New(
 			spinner.WithSpinner(spinner.Spinner(cfg.spinnerType)),
 			spinner.WithStyle(info),
 		),
-		handle:     handle,
-		titleStyle: info,
-		action:     fn,
-	}
+		handle,
+		info,
+		activeStyle,
+		rt,
+		fn,
+	)
 
 	final, runErr := tea.NewProgram(
 		model,
