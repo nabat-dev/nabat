@@ -112,8 +112,8 @@ func (multiSelectOpt) sealMultiSelect()                       {}
 
 // WithFiltering enables or disables incremental option filtering on select
 // and multi-select fields.
-func WithFiltering(enabled bool) SelectOption {
-	return selectOpt{fn: func(pc *promptConfig) error {
+func WithFiltering(enabled bool) MultiSelectOption {
+	return multiSelectOpt{fn: func(pc *promptConfig) error {
 		pc.filtering = enabled
 		return nil
 	}}
@@ -121,8 +121,8 @@ func WithFiltering(enabled bool) SelectOption {
 
 // WithHeight sets the visible row count for select and multi-select lists.
 // n must be > 0.
-func WithHeight(n int) SelectOption {
-	return selectOpt{fn: func(pc *promptConfig) error {
+func WithHeight(n int) MultiSelectOption {
+	return multiSelectOpt{fn: func(pc *promptConfig) error {
 		if n <= 0 {
 			return errors.New("nabat: WithHeight: n must be > 0")
 		}
