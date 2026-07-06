@@ -153,6 +153,6 @@ func (a *App) promptArg(def argDef) (any, error) {
 
 func (a *App) runPromptField(field huh.Field) error {
 	form := huh.NewForm(huh.NewGroup(field))
-	a.applyHuhTheme(form)
+	a.applyHuhThemeForAdHocPrompt(form)
 	return form.Run()
 }

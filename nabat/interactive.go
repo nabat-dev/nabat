@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // runAdhocPromptConfig applies [FieldOption] values to a [promptConfig],
@@ -44,6 +45,29 @@ func (a *App) applyHuhTheme(form *huh.Form) {
 		return
 	}
 	form.WithTheme(huhTheme)
+}
+
+// applyHuhThemeForAdHocPrompt applies the resolved theme to form with all
+// border sides stripped. Single-field ad-hoc prompts have no grouping to
+// communicate, so the left border drawn by huh.ThemeBase is visual noise.
+// [Form] and [Context.UnsafeForm] keep [applyHuhTheme]; their per-field
+// borders remain meaningful.
+func (a *App) applyHuhThemeForAdHocPrompt(form *huh.Form) {
+	base := a.cfg.resolvedTheme.Huh()
+	if base == nil {
+		// Fall back explicitly so the border strip still applies rather than
+		// letting huh silently reintroduce ThemeCharm's BorderLeft.
+		base = huh.ThemeFunc(huh.ThemeCharm)
+	}
+	noBorder := lipgloss.Border{}
+	form.WithTheme(huh.ThemeFunc(func(isDark bool) *huh.Styles {
+		s := *base.Theme(isDark) // shallow copy; prevents mutation of cached *Styles
+		s.Focused.Base = s.Focused.Base.Border(noBorder, false, false, false, false)
+		s.Focused.Card = s.Focused.Card.Border(noBorder, false, false, false, false)
+		s.Blurred.Base = s.Blurred.Base.Border(noBorder, false, false, false, false)
+		s.Blurred.Card = s.Blurred.Card.Border(noBorder, false, false, false, false)
+		return &s
+	}))
 }
 
 // Input asks for one string value when [Context.IsInteractive] is true.

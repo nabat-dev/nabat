@@ -16,10 +16,15 @@ package nabat
 
 import (
 	"errors"
+	"reflect"
 	"testing"
+	"unsafe"
 
+	"charm.land/huh/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"nabat.dev/theme"
 )
 
 func TestAdhocInputMethodsRequireInteractiveTerminal(t *testing.T) {
@@ -183,4 +188,137 @@ func TestPromptNilOptionWrapsErrInvalidOption(t *testing.T) {
 		"nil prompt option must wrap ErrInvalidOption")
 	assert.True(t, errors.Is(got, ErrNilOption),
 		"nil prompt option must wrap ErrNilOption")
+}
+
+// formTheme reads huh.Form's unexported theme field; huh provides no getter.
+func formTheme(form *huh.Form) huh.Theme {
+	rv := reflect.ValueOf(form).Elem().FieldByName("theme")
+	ptr := reflect.NewAt(rv.Type(), unsafe.Pointer(rv.UnsafeAddr()))
+	v := ptr.Elem().Interface()
+	if v == nil {
+		return nil
+	}
+	th, ok := v.(huh.Theme)
+	if !ok {
+		return nil
+	}
+	return th
+}
+
+// TestApplyHuhThemeForAdHocPromptRemovesBorder verifies that all four border
+// sides are stripped and PaddingLeft(1) is preserved, for both light and dark.
+func TestApplyHuhThemeForAdHocPromptRemovesBorder(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app, err := New("test", WithIO(io), WithTheme(theme.Default))
+	require.NoError(t, err)
+
+	for _, isDark := range []bool{false, true} {
+		name := map[bool]string{false: "light", true: "dark"}[isDark]
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			form := huh.NewForm(huh.NewGroup(huh.NewInput()))
+			app.applyHuhThemeForAdHocPrompt(form)
+
+			th := formTheme(form)
+			require.NotNil(t, th, "applyHuhThemeForAdHocPrompt must set a theme")
+			s := th.Theme(isDark)
+			require.NotNil(t, s)
+
+			slots := []struct {
+				label        string
+				top          bool
+				right        bool
+				bottom       bool
+				left         bool
+				paddingLeft  int
+				checkPadding bool
+			}{
+				{
+					label:        "Focused.Base",
+					top:          s.Focused.Base.GetBorderTop(),
+					right:        s.Focused.Base.GetBorderRight(),
+					bottom:       s.Focused.Base.GetBorderBottom(),
+					left:         s.Focused.Base.GetBorderLeft(),
+					paddingLeft:  s.Focused.Base.GetPaddingLeft(),
+					checkPadding: true,
+				},
+				{
+					label:  "Focused.Card",
+					top:    s.Focused.Card.GetBorderTop(),
+					right:  s.Focused.Card.GetBorderRight(),
+					bottom: s.Focused.Card.GetBorderBottom(),
+					left:   s.Focused.Card.GetBorderLeft(),
+				},
+				{
+					label:  "Blurred.Base",
+					top:    s.Blurred.Base.GetBorderTop(),
+					right:  s.Blurred.Base.GetBorderRight(),
+					bottom: s.Blurred.Base.GetBorderBottom(),
+					left:   s.Blurred.Base.GetBorderLeft(),
+				},
+				{
+					label:  "Blurred.Card",
+					top:    s.Blurred.Card.GetBorderTop(),
+					right:  s.Blurred.Card.GetBorderRight(),
+					bottom: s.Blurred.Card.GetBorderBottom(),
+					left:   s.Blurred.Card.GetBorderLeft(),
+				},
+			}
+			for _, sl := range slots {
+				assert.False(t, sl.top, "%s: border top must be off", sl.label)
+				assert.False(t, sl.right, "%s: border right must be off", sl.label)
+				assert.False(t, sl.bottom, "%s: border bottom must be off", sl.label)
+				assert.False(t, sl.left, "%s: border left must be off", sl.label)
+				if sl.checkPadding {
+					assert.Equal(t, 1, sl.paddingLeft,
+						"%s: PaddingLeft(1) must be preserved after border removal", sl.label)
+				}
+			}
+		})
+	}
+}
+
+// cachedPtrTheme simulates a Palette.Huh that returns a shared *huh.Styles.
+type cachedPtrTheme struct{ styles *huh.Styles }
+
+func (c *cachedPtrTheme) Theme(_ bool) *huh.Styles { return c.styles }
+
+// TestApplyHuhThemeForAdHocPromptDoesNotMutateSourceStyles verifies that a
+// Palette.Huh returning a cached *huh.Styles is not permanently mutated.
+func TestApplyHuhThemeForAdHocPromptDoesNotMutateSourceStyles(t *testing.T) {
+	t.Parallel()
+
+	// Build an app that uses a cached-pointer theme via Palette.Huh.
+	base := huh.ThemeFunc(huh.ThemeCharm).Theme(false)
+	cached := &cachedPtrTheme{styles: base}
+	require.True(t, cached.styles.Focused.Base.GetBorderLeft(),
+		"precondition: ThemeCharm must have BorderLeft enabled")
+
+	app, err := New("test",
+		WithCustomTheme(theme.Theme{
+			Variants: map[theme.Variant]theme.Palette{
+				theme.VariantDark: {Huh: cached},
+			},
+		}),
+	)
+	require.NoError(t, err)
+
+	// Apply the borderless wrapper.
+	form := huh.NewForm(huh.NewGroup(huh.NewInput()))
+	app.applyHuhThemeForAdHocPrompt(form)
+
+	// The wrapped theme must clear the border.
+	th := formTheme(form)
+	require.NotNil(t, th)
+	got := th.Theme(false)
+	require.NotNil(t, got)
+	assert.False(t, got.Focused.Base.GetBorderLeft(),
+		"wrapped theme must have left border cleared for ad-hoc prompt")
+
+	// The original cached *Styles pointer must be untouched.
+	assert.True(t, cached.styles.Focused.Base.GetBorderLeft(),
+		"applyHuhThemeForAdHocPrompt must not mutate the source *huh.Styles")
 }
