@@ -17,6 +17,7 @@ package manifest
 import (
 	"errors"
 	"fmt"
+	"image/color"
 	"sort"
 
 	"charm.land/huh/v2"
@@ -101,11 +102,12 @@ type CompiledVariant struct {
 	HuhTheme huh.Theme
 }
 
-// PromptKnobs stores theme-wide non-color prompt controls.
+// PromptKnobs stores theme-wide prompt controls.
 type PromptKnobs struct {
 	SelectedPrefix   string
 	UnselectedPrefix string
 	Border           lipgloss.Border
+	BorderColor      color.Color
 }
 
 // Parse decodes a manifest into a [*Compiled] intermediate. The
@@ -275,6 +277,12 @@ func parsePromptKnobs(raw *rawPromptKnobs) (*PromptKnobs, error) {
 			return nil, err
 		}
 		out.Border = b
+	}
+	if !raw.BorderColor.isEmpty() {
+		if raw.BorderColor.Hex == "" {
+			return nil, fmt.Errorf("promptKnobs.borderColor must be a hex literal")
+		}
+		out.BorderColor = lipgloss.Color(raw.BorderColor.Hex)
 	}
 	return out, nil
 }

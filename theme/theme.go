@@ -121,8 +121,8 @@ type Theme struct {
 	// [lipgloss.Border] resolves to [lipgloss.NormalBorder].
 	TableBorder lipgloss.Border
 
-	// PromptKnobs are theme-wide non-color prompt settings applied
-	// to token-derived and palette prompt styles.
+	// PromptKnobs are theme-wide prompt settings applied to token-derived
+	// and palette prompt styles.
 	PromptKnobs PromptKnobs
 }
 

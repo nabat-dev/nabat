@@ -15,6 +15,8 @@
 package theme
 
 import (
+	"image/color"
+
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -85,9 +87,13 @@ type Prompt struct {
 	// Border applies as the form / card border. The zero
 	// [lipgloss.Border] leaves huh's base border untouched.
 	Border lipgloss.Border
+
+	// BorderColor sets the focused field left-border foreground. The
+	// zero value leaves huh's base border color untouched.
+	BorderColor color.Color
 }
 
-// PromptKnobs carries non-color prompt settings that are convenient to
+// PromptKnobs carries theme-wide prompt settings that are convenient to
 // share across variants.
 type PromptKnobs struct {
 	// SelectedPrefix is the literal prefix rendered before selected
@@ -101,13 +107,18 @@ type PromptKnobs struct {
 	// Border is the form/card border to apply to prompt output. The
 	// zero [lipgloss.Border] leaves the prompt border unchanged.
 	Border lipgloss.Border
+
+	// BorderColor sets the focused field left-border foreground. The
+	// zero value leaves the prompt border color unchanged.
+	BorderColor color.Color
 }
 
 // IsZero reports whether k leaves every prompt knob unset.
 func (k PromptKnobs) IsZero() bool {
 	return k.SelectedPrefix == "" &&
 		k.UnselectedPrefix == "" &&
-		k.Border == (lipgloss.Border{})
+		k.Border == (lipgloss.Border{}) &&
+		colorIsUnset(k.BorderColor)
 }
 
 // Apply overlays non-zero knobs from k onto p and returns the result.
@@ -121,6 +132,9 @@ func (k PromptKnobs) Apply(p Prompt) Prompt {
 	if k.Border != (lipgloss.Border{}) {
 		p.Border = k.Border
 	}
+	if !colorIsUnset(k.BorderColor) {
+		p.BorderColor = k.BorderColor
+	}
 	return p
 }
 
@@ -129,10 +143,10 @@ func (k PromptKnobs) Apply(p Prompt) Prompt {
 // catalog can fall back to [PromptFromTokens] without having to
 // special-case nil.
 //
-// A Prompt with only [Border] set is non-zero; a Prompt with only
-// the zero lipgloss.Border but every style field set is also
-// non-zero. The zero Prompt — every style empty AND the zero border
-// — is the only "unset" value.
+// A Prompt with only [Border] or [BorderColor] set is non-zero; a
+// Prompt with only the zero lipgloss.Border but every style field
+// set is also non-zero. The zero Prompt — every style empty, the
+// zero border, and no border color — is the only "unset" value.
 //
 // lipgloss.Style is not comparable (it carries slices internally),
 // so the check inspects every field through styleIsZero rather than
@@ -151,7 +165,8 @@ func (p Prompt) IsZero() bool {
 		styleIsZero(p.Selector) &&
 		styleIsZero(p.ButtonFocused) &&
 		styleIsZero(p.ButtonBlurred) &&
-		p.Border == (lipgloss.Border{})
+		p.Border == (lipgloss.Border{}) &&
+		colorIsUnset(p.BorderColor)
 }
 
 // styleIsZero reports whether s has any visible attribute set. The
@@ -189,9 +204,10 @@ func styleIsZero(s lipgloss.Style) bool {
 // stable cross-state appearance; authors who want different blurred
 // styling drop into [Palette.Huh] directly.
 //
-// Border applies to Focused.Base and Focused.Card when non-zero,
-// then mirrors onto Blurred.Base / Blurred.Card so the form chrome
-// stays consistent.
+// Border applies to Focused.Base and Focused.Card when non-zero.
+// BorderColor applies to the focused left border when set. Blurred
+// fields always use a hidden border so the focused left border acts
+// as the focus indicator.
 func (p Prompt) Huh() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
@@ -218,6 +234,11 @@ func (p Prompt) Huh() huh.Theme {
 		s.Focused.TextInput.Prompt = overlayStyle(s.Focused.TextInput.Prompt, p.Title)
 		s.Focused.TextInput.Text = overlayStyle(s.Focused.TextInput.Text, p.UnselectedOption)
 
+		if !colorIsUnset(p.BorderColor) {
+			s.Focused.Base = s.Focused.Base.BorderForeground(p.BorderColor)
+			s.Focused.Card = s.Focused.Card.BorderForeground(p.BorderColor)
+		}
+
 		// Mirror focused styling onto blurred so the form keeps a
 		// consistent look between active and inactive states. The
 		// previous huhStyle pipeline let authors customize blurred
@@ -225,11 +246,18 @@ func (p Prompt) Huh() huh.Theme {
 		// trades that knob away for simpler authoring. Authors who
 		// need separate blurred styling reach for Palette.Huh.
 		s.Blurred = s.Focused
+		s.Blurred.Base = s.Blurred.Base.BorderStyle(lipgloss.HiddenBorder())
+		s.Blurred.Card = s.Blurred.Card.BorderStyle(lipgloss.HiddenBorder())
+		// huh's own themes clear these two indicators on Blurred so an
+		// inactive multi-select's pagination arrows don't linger;
+		// mirror that here since the copy above would otherwise carry
+		// the focused arrows over unchanged.
+		s.Blurred.NextIndicator = lipgloss.NewStyle()
+		s.Blurred.PrevIndicator = lipgloss.NewStyle()
+
 		if p.Border != (lipgloss.Border{}) {
 			s.Focused.Base = s.Focused.Base.BorderStyle(p.Border)
 			s.Focused.Card = s.Focused.Card.BorderStyle(p.Border)
-			s.Blurred.Base = s.Blurred.Base.BorderStyle(lipgloss.HiddenBorder())
-			s.Blurred.Card = s.Blurred.Card.BorderStyle(lipgloss.HiddenBorder())
 		}
 
 		s.Group.Title = s.Focused.Title
@@ -272,6 +300,7 @@ func PromptFromTokens(tokens map[Token]lipgloss.Style) Prompt {
 		Selector:         tokens[StatusInfo],
 		ButtonFocused:    tokens[AccentPrimary],
 		ButtonBlurred:    tokens[TextMuted],
+		BorderColor:      colorFromStyle(tokens[AccentPrimary]),
 	}
 }
 
@@ -312,6 +341,19 @@ func overlayStyle(dst, src lipgloss.Style) lipgloss.Style {
 		out = out.SetString(str)
 	}
 	return out
+}
+
+// colorFromStyle returns the style foreground when set.
+func colorFromStyle(s lipgloss.Style) color.Color {
+	if fg := s.GetForeground(); !isNoColor(fg) {
+		return fg
+	}
+	return nil
+}
+
+// colorIsUnset reports whether c is absent for Prompt border slots.
+func colorIsUnset(c color.Color) bool {
+	return c == nil || isNoColor(c)
 }
 
 // isNoColor returns true when c is the typed lipgloss.NoColor

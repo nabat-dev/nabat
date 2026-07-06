@@ -166,6 +166,7 @@ func themeFromCompiled(c *manifest.Compiled) Theme {
 			SelectedPrefix:   c.PromptKnobs.SelectedPrefix,
 			UnselectedPrefix: c.PromptKnobs.UnselectedPrefix,
 			Border:           c.PromptKnobs.Border,
+			BorderColor:      c.PromptKnobs.BorderColor,
 		}
 	}
 

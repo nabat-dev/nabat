@@ -61,11 +61,12 @@ type rawSlice struct {
 	Huh        string              `json:"huh,omitempty"`
 }
 
-// rawPromptKnobs captures root-level non-color prompt settings.
+// rawPromptKnobs captures root-level prompt settings shared across variants.
 type rawPromptKnobs struct {
 	SelectedPrefix   string       `json:"selectedPrefix,omitempty"`
 	UnselectedPrefix string       `json:"unselectedPrefix,omitempty"`
 	Border           rawBorderRef `json:"border,omitempty"`
+	BorderColor      rawColorRef  `json:"borderColor"`
 }
 
 // rawStyle is the JSON form of one entry in the tokens map.

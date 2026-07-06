@@ -84,7 +84,8 @@
       "properties": {
         "selectedPrefix": { "type": "string" },
         "unselectedPrefix": { "type": "string" },
-        "border": { "$ref": "#/$defs/borderPreset" }
+        "border": { "$ref": "#/$defs/borderPreset" },
+        "borderColor": { "$ref": "#/$defs/hexColor" }
       }
     },
     "hexColor": {

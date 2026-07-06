@@ -15,8 +15,10 @@
 package manifest
 
 import (
+	"image/color"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -159,6 +161,44 @@ func TestParsePromptKnobsRejectsNilInput(t *testing.T) {
 	knobs, err := parsePromptKnobs(nil)
 	require.ErrorIs(t, err, errNilPromptKnobs)
 	assert.Nil(t, knobs)
+}
+
+func TestParsePromptKnobsBorderColorHex(t *testing.T) {
+	t.Parallel()
+
+	knobs, err := parsePromptKnobs(&rawPromptKnobs{
+		BorderColor: rawColorRef{Hex: "#AABBCC"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, knobs)
+	assert.True(t, sameManifestColor(knobs.BorderColor, lipgloss.Color("#AABBCC")))
+}
+
+func TestParsePromptKnobsBorderColorRejectsTokenRef(t *testing.T) {
+	t.Parallel()
+
+	_, err := parsePromptKnobs(&rawPromptKnobs{
+		BorderColor: rawColorRef{Token: "accent.primary"},
+	})
+	require.ErrorContains(t, err, "promptKnobs.borderColor must be a hex literal")
+}
+
+func TestParsePromptKnobsBorderColorRejectsPrimitiveRef(t *testing.T) {
+	t.Parallel()
+
+	_, err := parsePromptKnobs(&rawPromptKnobs{
+		BorderColor: rawColorRef{Primitive: "crystalGold"},
+	})
+	require.ErrorContains(t, err, "promptKnobs.borderColor must be a hex literal")
+}
+
+func sameManifestColor(a, b color.Color) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	ar, ag, ab, aa := a.RGBA()
+	br, bg, bb, ba := b.RGBA()
+	return ar == br && ag == bg && ab == bb && aa == ba
 }
 
 func TestParseRejectsTrailingJSONData(t *testing.T) {

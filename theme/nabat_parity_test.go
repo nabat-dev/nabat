@@ -116,13 +116,15 @@ func TestNabatPromptParityFromManifest(t *testing.T) {
 	assert.Equal(t, "✓ ", s.Focused.SelectedPrefix.Value(), "focused.selectedPrefix text")
 	assert.Equal(t, "• ", s.Focused.UnselectedPrefix.Value(), "focused.unselectedPrefix text")
 
-	// Border override applies to focused.base and is mirrored to
-	// blurred.base (with the framework's hidden-border treatment so
-	// the inactive form does not visually compete).
+	// Border override applies to focused.base and blurred.base always
+	// uses a hidden border so the focused left border acts as the
+	// focus indicator.
 	assert.Equal(t, lipgloss.RoundedBorder(), s.Focused.Base.GetBorderStyle(),
 		"focused.base border should match promptKnobs.border")
+	assert.True(t, sameColor(s.Focused.Base.GetBorderLeftForeground(), lipgloss.Color("#C89B3C")),
+		"focused.base border color should match accent.primary")
 	assert.Equal(t, lipgloss.HiddenBorder(), s.Blurred.Base.GetBorderStyle(),
-		"blurred.base border should be hidden when promptStyle.border is set")
+		"blurred.base border should always be hidden")
 
 	// Prompt.Huh deliberately mirrors focused -> blurred so the
 	// inactive state stays on-palette without the manifest having to
