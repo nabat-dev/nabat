@@ -181,7 +181,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("count", 1),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[int](c, "count")
+					v, err := c.BindAs[int]("count")
 					require.NoError(t, err)
 					assert.Equal(t, 42, v)
 					return nil
@@ -194,7 +194,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("ratio", 0.0),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[float64](c, "ratio")
+					v, err := c.BindAs[float64]("ratio")
 					require.NoError(t, err)
 					assert.InDelta(t, 3.14, v, 0.001)
 					return nil
@@ -207,7 +207,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("size", int64(0)),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[int64](c, "size")
+					v, err := c.BindAs[int64]("size")
 					require.NoError(t, err)
 					assert.Equal(t, int64(9876543210), v)
 					return nil
@@ -220,7 +220,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("port", uint(0)),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[uint](c, "port")
+					v, err := c.BindAs[uint]("port")
 					require.NoError(t, err)
 					assert.Equal(t, uint(8080), v)
 					return nil
@@ -233,7 +233,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("timeout", time.Duration(0)),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[time.Duration](c, "timeout")
+					v, err := c.BindAs[time.Duration]("timeout")
 					require.NoError(t, err)
 					assert.Equal(t, 30*time.Second, v)
 					return nil
@@ -246,7 +246,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("body", ""),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[string](c, "body")
+					v, err := c.BindAs[string]("body")
 					require.NoError(t, err)
 					assert.Equal(t, "hello world", v)
 					return nil
@@ -259,7 +259,7 @@ func TestArgTypedFromCLI(t *testing.T) {
 			opts: []CommandOption{
 				WithArg("path", ""),
 				WithRun(func(c *Context) error {
-					v, err := BindAs[string](c, "path")
+					v, err := c.BindAs[string]("path")
 					require.NoError(t, err)
 					assert.Equal(t, "/tmp/test.txt", v)
 					return nil
@@ -291,7 +291,7 @@ func TestWithEnvArgPrimaryFirst(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("token", "", WithEnv("token"), WithEnvAlias("FALLBACK_TOKEN")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "token")
+			v, err := c.BindAs[string]("token")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -310,7 +310,7 @@ func TestWithEnvArgFallsBackToAlias(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("token", "", WithEnv("token"), WithEnvAlias("FALLBACK_TOKEN")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "token")
+			v, err := c.BindAs[string]("token")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -333,7 +333,7 @@ func TestArgDefaultValIsNonInteractiveFallback(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("name", "fallback-name"),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "name")
+			v, err := c.BindAs[string]("name")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -449,7 +449,7 @@ func TestRequiredSelectArgFromEnvWithoutCLIPositional(t *testing.T) {
 		WithSelectArg("environment", "staging", []string{"staging", "production"},
 			WithRequired(), WithEnv("environment")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "environment")
+			v, err := c.BindAs[string]("environment")
 			require.NoError(t, err)
 			c.Print(v)
 			return nil
@@ -468,7 +468,7 @@ func TestWithArgIntFromEnv(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("count", 0, WithEnv("count")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[int](c, "count")
+			v, err := c.BindAs[int]("count")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -486,7 +486,7 @@ func TestWithArgUintFromEnv(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("port", uint(0), WithEnv("port")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[uint](c, "port")
+			v, err := c.BindAs[uint]("port")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -504,7 +504,7 @@ func TestWithArgInt64FromEnv(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("size", int64(0), WithEnv("size")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[int64](c, "size")
+			v, err := c.BindAs[int64]("size")
 			require.NoError(t, err)
 			got = v
 			return nil

@@ -168,7 +168,7 @@ func TestWithValidationRunsAfterResolution(t *testing.T) {
 		WithFlag("format", "text"),
 		WithFlag("output", ""),
 		WithValidation(func(c *Context) error {
-			format, err := BindAs[string](c, "format")
+			format, err := c.BindAs[string]("format")
 			if err != nil {
 				return err
 			}
@@ -194,7 +194,7 @@ func TestWithValidationPassesWhenValid(t *testing.T) {
 		WithFlag("format", "text"),
 		WithFlag("output", ""),
 		WithValidation(func(c *Context) error {
-			format, err := BindAs[string](c, "format")
+			format, err := c.BindAs[string]("format")
 			if err != nil {
 				return err
 			}
@@ -218,7 +218,7 @@ func TestWithValidationMultipleAllMustPass(t *testing.T) {
 		WithFlag("a", "ok"),
 		WithFlag("b", "ok"),
 		WithValidation(func(c *Context) error {
-			a, err := BindAs[string](c, "a")
+			a, err := c.BindAs[string]("a")
 			if err != nil {
 				return err
 			}
@@ -228,7 +228,7 @@ func TestWithValidationMultipleAllMustPass(t *testing.T) {
 			return nil
 		}),
 		WithValidation(func(c *Context) error {
-			b, err := BindAs[string](c, "b")
+			b, err := c.BindAs[string]("b")
 			if err != nil {
 				return err
 			}

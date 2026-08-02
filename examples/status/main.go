@@ -281,7 +281,7 @@ func runEvents(c *nabat.Context) error {
 // line with SetText updates and no rows. Use this when you just need "working"
 // feedback without tracking individual items.
 func runDeploy(c *nabat.Context) error {
-	return c.Spinner("Connecting to cluster...", func(sp *nabat.Spinner) error {
+	return c.Spinner(func(sp *nabat.Spinner) error {
 		time.Sleep(500 * time.Millisecond)
 		sp.SetText("Building image...")
 		time.Sleep(800 * time.Millisecond)
@@ -291,5 +291,5 @@ func runDeploy(c *nabat.Context) error {
 		time.Sleep(700 * time.Millisecond)
 		sp.SetText("Done")
 		return nil
-	})
+	}, nabat.WithTitle("Connecting to cluster..."))
 }

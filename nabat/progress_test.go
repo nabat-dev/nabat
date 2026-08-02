@@ -141,14 +141,12 @@ func TestProgressBarConcurrentIncrement(t *testing.T) {
 		require.NoError(t, err)
 
 		var wg sync.WaitGroup
-		wg.Add(goroutines)
 		for range goroutines {
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				for range incrementsPerGoroutine {
 					bar.Increment()
 				}
-			}()
+			})
 		}
 		wg.Wait()
 		bar.Done()

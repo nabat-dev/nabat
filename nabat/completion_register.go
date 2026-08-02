@@ -57,7 +57,7 @@ func (a *App) registerCompletion() error {
 	}
 
 	write := func(c *Context, gen func(io.Writer) error) error {
-		output, bindErr := BindAs[string](c, "output")
+		output, bindErr := c.BindAs[string]("output")
 		if bindErr != nil || output == "" {
 			return gen(a.io.Out)
 		}

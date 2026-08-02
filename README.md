@@ -114,7 +114,7 @@ Read more in the [Brand Story](#brand-story).
 
 ## Install
 
-Requires **Go 1.26** or newer.
+Requires **Go 1.27** or newer.
 
 ```bash
 go get nabat.dev
@@ -319,11 +319,11 @@ nabat.WithCommand("greet",
         ),
     ),
     nabat.WithRun(func(c *nabat.Context) error {
-        name, err := nabat.BindAs[string](c, "name")
+        name, err := c.BindAs[string]("name")
         if err != nil {
             return err
         }
-        format, err := nabat.BindAs[string](c, "format")
+        format, err := c.BindAs[string]("format")
         if err != nil {
             return err
         }
@@ -351,7 +351,7 @@ nabat.WithMultiSelectArg("services", []string{"web"}, []string{"web", "db", "cac
     ),
 )
 // In the handler:
-services, err := nabat.BindAs[[]string](c, "services")
+services, err := c.BindAs[[]string]("services")
 ```
 
 > **Required args in non-TTY environments (CI, pipes):** when `WithRequired()` is set and stdin is not a terminal, Nabat returns an error instead of prompting. Provide the value via a CLI arg or add `WithEnv("KEY")` so it can also come from an environment variable.
@@ -425,7 +425,7 @@ nabat.WithSelectFlag("output", "table", []string{"table", "json", "yaml"},
     nabat.WithUsage("Output format"),
 )
 // In the handler:
-format, err := nabat.BindAs[string](c, "output")
+format, err := c.BindAs[string]("output")
 ```
 
 `WithMultiSelectFlag` allows picking one or more values from a list. The resolved value is a `[]string`:
@@ -435,7 +435,7 @@ nabat.WithMultiSelectFlag("regions", []string{"us"}, []string{"us", "eu", "ap"},
     nabat.WithUsage("Target regions"),
 )
 // In the handler:
-regions, err := nabat.BindAs[[]string](c, "regions")
+regions, err := c.BindAs[[]string]("regions")
 ```
 
 Flag-only options:
@@ -522,19 +522,19 @@ nabat.WithRun(func(c *nabat.Context) error {
 **`BindAs`** returns `(T, error)`; the error covers a missing name or a type that does not match the resolved value.
 
 ```go
-env, err := nabat.BindAs[string](c, "environment")
+env, err := c.BindAs[string]("environment")
 if err != nil {
     return err
 }
-count, err := nabat.BindAs[int](c, "replicas")
+count, err := c.BindAs[int]("replicas")
 if err != nil {
     return err
 }
-loud, err := nabat.BindAs[bool](c, "verbose")
+loud, err := c.BindAs[bool]("verbose")
 if err != nil {
     return err
 }
-tags, err := nabat.BindAs[[]string](c, "tags")
+tags, err := c.BindAs[[]string]("tags")
 if err != nil {
     return err
 }
@@ -613,7 +613,7 @@ nabat.WithCommand("deploy",
         return checkAuth(c)
     }),
     nabat.WithValidation(func(c *nabat.Context) error {
-        format, err := nabat.BindAs[string](c, "format")
+        format, err := c.BindAs[string]("format")
         if err != nil {
             return err
         }
@@ -743,13 +743,13 @@ bar.Done()
 choice when you need "working" feedback without tracking individual items.
 
 ```go
-err := c.Spinner("Connecting to cluster...", func(sp *nabat.Spinner) error {
+err := c.Spinner(func(sp *nabat.Spinner) error {
     time.Sleep(500 * time.Millisecond)
     sp.SetText("Building image...")
     time.Sleep(800 * time.Millisecond)
     sp.SetText("Rolling out pods...")
     return nil
-}, nabat.WithSpinnerType(nabat.SpinnerDots()))
+}, nabat.WithTitle("Connecting to cluster..."), nabat.WithSpinnerType(nabat.SpinnerDots()))
 ```
 
 `SetText` updates the header title while the work runs. The header shows a
@@ -895,18 +895,18 @@ cert, err := c.FilePicker("Certificate",
 )
 ```
 
-`nabat.Select` and `nabat.MultiSelect` are package-level functions rather than methods on `Context` because Go does not support generic methods; `T` is inferred from the type of the choices slice.
+`c.Select` and `c.MultiSelect` are generic methods on `Context`. `E` is inferred from the type of the choices slice.
 
 ```go
-// Select — defaultVal is a positional arg; T inferred from choices
-env, err := nabat.Select(c, "Environment",
+// Select — defaultVal is a positional arg; E inferred from choices
+env, err := c.Select("Environment",
     []string{"staging", "production"},
     "staging",               // defaultVal (used when non-interactive)
     nabat.WithFiltering(true),
 )
 
 // MultiSelect — same pattern
-regions, err := nabat.MultiSelect(c, "Regions",
+regions, err := c.MultiSelect("Regions",
     []string{"us", "eu", "ap"},
     []string{"us"},          // defaultVal
     nabat.WithLimit(2),

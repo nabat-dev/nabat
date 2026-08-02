@@ -400,7 +400,7 @@ func WithExample(md string) RootOption {
 // Multiple calls accumulate; all validations must pass.
 //
 //	WithValidation(func(c *Context) error {
-//	    if format == "json" && !c.Explicit("output") { // use BindAs[string](c, "format"), etc.
+//	    if format == "json" && !c.Explicit("output") { // use c.BindAs[string]("format"), etc.
 //	        return errors.New("--output is required when --format=json")
 //	    }
 //	    return nil

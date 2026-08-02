@@ -163,12 +163,12 @@ func (e *extension) Init(app nabat.AppSurface) error {
 func resolveLevel(c *nabat.Context, cfg config) slog.Level {
 	level := cfg.level
 	if cfg.verboseFlag != "" {
-		if v, err := nabat.BindAs[bool](c, cfg.verboseFlag); err == nil && c.Explicit(cfg.verboseFlag) && v {
+		if v, err := c.BindAs[bool](cfg.verboseFlag); err == nil && c.Explicit(cfg.verboseFlag) && v {
 			level = slog.LevelDebug
 		}
 	}
 	if cfg.levelFlag != "" {
-		if s, err := nabat.BindAs[string](c, cfg.levelFlag); err == nil && c.Explicit(cfg.levelFlag) && s != "" {
+		if s, err := c.BindAs[string](cfg.levelFlag); err == nil && c.Explicit(cfg.levelFlag) && s != "" {
 			if parsed, parseErr := ParseLevel(s); parseErr == nil {
 				level = parsed
 			}

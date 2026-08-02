@@ -35,10 +35,10 @@ func TestSpinnerRunsFnWhenStderrNotTTY(t *testing.T) {
 	ran := false
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		return c.Spinner("Building", func(_ *Spinner) error {
+		return c.Spinner(func(_ *Spinner) error {
 			ran = true
 			return nil
-		})
+		}, WithTitle("Building"))
 	}))
 
 	require.NoError(t, Run(t, app, []string{"run"}))
@@ -57,11 +57,11 @@ func TestSpinnerSetTextIsNoOpInFallback(t *testing.T) {
 
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		return c.Spinner("Step 1", func(sp *Spinner) error {
+		return c.Spinner(func(sp *Spinner) error {
 			sp.SetText("Step 2")
 			sp.SetText("Step 3")
 			return nil
-		})
+		}, WithTitle("Step 1"))
 	}))
 
 	require.NoError(t, Run(t, app, []string{"run"}))
@@ -86,9 +86,9 @@ func TestSpinnerPropagatesFnError(t *testing.T) {
 	app := MustNew("test", WithIO(io))
 	var got error
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		got = c.Spinner("Building", func(_ *Spinner) error {
+		got = c.Spinner(func(_ *Spinner) error {
 			return sentinel
-		})
+		}, WithTitle("Building"))
 		return nil
 	}))
 
@@ -108,7 +108,7 @@ func TestSpinnerAggregatesOptionErrors(t *testing.T) {
 	app := MustNew("test", WithIO(io))
 	var got error
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		got = c.Spinner("Building", func(_ *Spinner) error { return nil }, nil)
+		got = c.Spinner(func(_ *Spinner) error { return nil }, nil)
 		return nil
 	}))
 
@@ -131,19 +131,17 @@ func TestSpinnerSetTextConcurrentIsSafe(t *testing.T) {
 
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		return c.Spinner("Working", func(sp *Spinner) error {
+		return c.Spinner(func(sp *Spinner) error {
 			const goroutines = 16
 			var wg sync.WaitGroup
-			wg.Add(goroutines)
 			for i := range goroutines {
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					sp.SetText(strings.Repeat("x", i))
-				}()
+				})
 			}
 			wg.Wait()
 			return nil
-		})
+		}, WithTitle("Working"))
 	}))
 
 	require.NoError(t, Run(t, app, []string{"run"}))
@@ -158,7 +156,7 @@ func TestSpinnerEmptyTitleSkipsFallbackLine(t *testing.T) {
 
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		return c.Spinner("", func(_ *Spinner) error { return nil })
+		return c.Spinner(func(_ *Spinner) error { return nil })
 	}))
 
 	require.NoError(t, Run(t, app, []string{"run"}))

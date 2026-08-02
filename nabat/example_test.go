@@ -160,7 +160,7 @@ func ExampleApp_Command() {
 		nabat.WithDescription("Show deployment status"),
 		nabat.WithFlag("env", "staging"),
 		nabat.WithRun(func(c *nabat.Context) error {
-			env, bindErr := nabat.BindAs[string](c, "env")
+			env, bindErr := c.BindAs[string]("env")
 			if bindErr != nil {
 				return bindErr
 			}
@@ -209,7 +209,7 @@ func ExampleApp_RunArgs() {
 	app.MustCommand("echo",
 		nabat.WithFlag("msg", "default"),
 		nabat.WithRun(func(c *nabat.Context) error {
-			msg, err := nabat.BindAs[string](c, "msg")
+			msg, err := c.BindAs[string]("msg")
 			if err != nil {
 				return err
 			}
@@ -226,7 +226,7 @@ func ExampleApp_RunArgs() {
 	// hello
 }
 
-func ExampleBindAs_string() {
+func ExampleContext_BindAs_string() {
 	var out bytes.Buffer
 	app := nabat.MustNew("getctl",
 		nabat.WithIO(nabat.NewIO(strings.NewReader(""), &out, &out)),
@@ -235,7 +235,7 @@ func ExampleBindAs_string() {
 	app.MustCommand("show",
 		nabat.WithFlag("label", "default"),
 		nabat.WithRun(func(c *nabat.Context) error {
-			label, err := nabat.BindAs[string](c, "label")
+			label, err := c.BindAs[string]("label")
 			if err != nil {
 				return err
 			}
@@ -317,7 +317,7 @@ func ExampleWithEnv() {
 	app.MustCommand("region",
 		nabat.WithFlag("region", "", nabat.WithEnv("region")),
 		nabat.WithRun(func(c *nabat.Context) error {
-			region, bindErr := nabat.BindAs[string](c, "region")
+			region, bindErr := c.BindAs[string]("region")
 			if bindErr != nil {
 				return bindErr
 			}
@@ -606,7 +606,7 @@ func ExampleNew_singleCommand() {
 		nabat.WithDescription("Print a friendly greeting"),
 		nabat.WithArg("name", "world"),
 		nabat.WithRun(func(c *nabat.Context) error {
-			name, err := nabat.BindAs[string](c, "name")
+			name, err := c.BindAs[string]("name")
 			if err != nil {
 				return err
 			}
@@ -699,7 +699,7 @@ func ExampleArgOptions() {
 				),
 			),
 			nabat.WithRun(func(c *nabat.Context) error {
-				v, err := nabat.BindAs[string](c, "env")
+				v, err := c.BindAs[string]("env")
 				if err != nil {
 					return err
 				}
