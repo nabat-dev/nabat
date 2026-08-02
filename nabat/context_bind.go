@@ -76,7 +76,7 @@ func (c *Context) Bind(target any) error {
 //   - "nabat: BindAs: %q has no resolved value" when the name was not resolved
 //   - "nabat: BindAs %q: value type ... does not match requested type ..." on type
 //     mismatch
-func BindAs[T any](c *Context, name string) (T, error) {
+func (c *Context) BindAs[T any](name string) (T, error) {
 	var zero T
 	if c == nil {
 		return zero, fmt.Errorf("nabat: BindAs: context is nil")

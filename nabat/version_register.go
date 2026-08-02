@@ -51,7 +51,7 @@ func (a *App) registerVersion() error {
 			WithDescription("Print version information"),
 			WithFlag("format", "text", WithUsage(`output format: "text", "short", or "json"`)),
 			WithRun(func(c *Context) error {
-				format, err := BindAs[string](c, "format")
+				format, err := c.BindAs[string]("format")
 				if err != nil {
 					return err
 				}

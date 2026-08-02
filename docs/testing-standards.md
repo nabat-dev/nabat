@@ -167,7 +167,7 @@ func TestDeploy(t *testing.T) {
     app.MustCommand("deploy",
         nabat.WithArg("target", "staging"),
         nabat.WithRun(func(c *nabat.Context) error {
-            target, err := nabat.BindAs[string](c, "target")
+            target, err := c.BindAs[string]("target")
             if err != nil {
                 return err
             }
@@ -335,7 +335,7 @@ func TestCommandOutput(t *testing.T) {
     app.MustCommand("greet",
         nabat.WithArg("name", "world"),
         nabat.WithRun(func(c *nabat.Context) error {
-            name, err := nabat.BindAs[string](c, "name")
+            name, err := c.BindAs[string]("name")
             if err != nil {
                 return err
             }
@@ -366,7 +366,7 @@ func TestArgResolvesFromPositional(t *testing.T) {
     app.MustCommand("deploy",
         nabat.WithArg("target", ""),
         nabat.WithRun(func(c *nabat.Context) error {
-            v, err := nabat.BindAs[string](c, "target")
+            v, err := c.BindAs[string]("target")
             if err != nil {
                 return err
             }
@@ -393,7 +393,7 @@ func TestArgResolvesFromEnv(t *testing.T) {
     app.MustCommand("deploy",
         nabat.WithArg("target", "", nabat.WithEnv("target")),
         nabat.WithRun(func(c *nabat.Context) error {
-            v, err := nabat.BindAs[string](c, "target")
+            v, err := c.BindAs[string]("target")
             if err != nil {
                 return err
             }
@@ -422,7 +422,7 @@ func TestArgFallsBackToDefault(t *testing.T) {
     app.MustCommand("deploy",
         nabat.WithArg("target", "staging"),
         nabat.WithRun(func(c *nabat.Context) error {
-            v, err := nabat.BindAs[string](c, "target")
+            v, err := c.BindAs[string]("target")
             if err != nil {
                 return err
             }
@@ -469,7 +469,7 @@ func TestFlagResolvesFromArgs(t *testing.T) {
     app.MustCommand("scale",
         nabat.WithFlag("replicas", 1),
         nabat.WithRun(func(c *nabat.Context) error {
-            n, err := nabat.BindAs[int](c, "replicas")
+            n, err := c.BindAs[int]("replicas")
             if err != nil {
                 return err
             }
@@ -500,7 +500,7 @@ func TestNestedCommandReceivesArg(t *testing.T) {
     cluster.MustCommand("create",
         nabat.WithArg("name", ""),
         nabat.WithRun(func(c *nabat.Context) error {
-            v, err := nabat.BindAs[string](c, "name")
+            v, err := c.BindAs[string]("name")
             if err != nil {
                 return err
             }
@@ -541,7 +541,7 @@ func TestExplicitTrueWhenUserPassesArg(t *testing.T) {
 }
 ```
 
-For optional reads or type assertions, use `nabat.BindAs` (or `Context.Bind` into a struct).
+For optional reads or type assertions, use `Context.BindAs` (or `Context.Bind` into a struct).
 `BindAs` returns an error when the name has no resolved value.
 
 ### Testing Construction Failures
@@ -750,7 +750,7 @@ func Example() {
     app.MustCommand("hello",
         nabat.WithArg("name", "world"),
         nabat.WithRun(func(c *nabat.Context) error {
-            name, _ := nabat.BindAs[string](c, "name")
+            name, _ := c.BindAs[string]("name")
             c.Print(name)
             return nil
         }),

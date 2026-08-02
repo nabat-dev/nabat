@@ -188,17 +188,13 @@ func (c *Context) FilePicker(prompt string, opts ...FieldOption[string]) (string
 }
 
 // Select asks for one choice from choices when interactive. E is inferred
-// from the choices slice, enabling typed enum selects.
-//
-// Select is a package-level function (not a method) because Go does not
-// allow type parameters on methods.
+// from the choices slice, enabling typed enum selects. When not interactive,
+// Select returns defaultVal without prompting.
 //
 // Errors:
-//   - "nabat: select requires interactive terminal" when not interactive and
-//     no [WithDefault] set via a [FieldOption][E]
 //   - [*ConfigErrors] from option validation
 //   - errors from the prompt layer
-func Select[E comparable](c *Context, prompt string, choices []E, defaultVal E, opts ...SelectOption) (E, error) {
+func (c *Context) Select[E comparable](prompt string, choices []E, defaultVal E, opts ...SelectOption) (E, error) {
 	var pc promptConfig
 	if err := applySelectOptions("select", opts, &pc); err != nil {
 		return defaultVal, err
@@ -230,16 +226,13 @@ func Select[E comparable](c *Context, prompt string, choices []E, defaultVal E, 
 }
 
 // MultiSelect asks for multiple choices when interactive. E is inferred from
-// the choices slice.
-//
-// MultiSelect is a package-level function (not a method) because Go does not
-// allow type parameters on methods.
+// the choices slice. When not interactive, MultiSelect returns defaultVal
+// without prompting.
 //
 // Errors:
-//   - "nabat: multi-select requires interactive terminal" when not interactive
 //   - [*ConfigErrors] from option validation
 //   - errors from the prompt layer
-func MultiSelect[E comparable](c *Context, prompt string, choices, defaultVal []E, opts ...MultiSelectOption) ([]E, error) {
+func (c *Context) MultiSelect[E comparable](prompt string, choices, defaultVal []E, opts ...MultiSelectOption) ([]E, error) {
 	var pc promptConfig
 	if err := applySelectOptions("multi-select", asSelectOptions(opts), &pc); err != nil {
 		return defaultVal, err

@@ -619,10 +619,8 @@ func TestStatusRowConcurrentSafe(t *testing.T) {
 
 	const goroutines = 20
 	var wg sync.WaitGroup
-	wg.Add(goroutines)
 	for i := range goroutines {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			row.Label("label")
 			row.Set("status", "detail")
 			row.Priority(i % 3)
@@ -636,7 +634,7 @@ func TestStatusRowConcurrentSafe(t *testing.T) {
 			default:
 				row.Error()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -652,12 +650,10 @@ func TestStatusRowSnapshotConcurrentSafe(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(10)
 	for range 10 {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_ = st.rowSnapshots()
-		}()
+		})
 	}
 	wg.Wait()
 }

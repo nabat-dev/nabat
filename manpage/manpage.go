@@ -97,11 +97,11 @@ func (e *extension) Init(app nabat.AppSurface) error {
 	}
 	cmdOpts = append(cmdOpts,
 		nabat.WithRun(func(c *nabat.Context) error {
-			section, err := nabat.BindAs[int](c, "section")
+			section, err := c.BindAs[int]("section")
 			if err != nil {
 				return err
 			}
-			output, err := nabat.BindAs[string](c, "output")
+			output, err := c.BindAs[string]("output")
 			if err != nil {
 				return err
 			}

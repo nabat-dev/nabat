@@ -50,7 +50,7 @@ import (
 // type that only satisfies [FieldOption] for the relevant kind.
 //
 // Usage contexts:
-//   - Ad-hoc prompts: [Context.Input], [Context.Confirm], [nabat.Select], etc.
+//   - Ad-hoc prompts: [Context.Input], [Context.Confirm], [Context.Select], etc.
 //   - Form fields: [WithFormField], [WithSelectField], [WithMultiSelectField]
 //   - Declarative arg prompts: [WithPrompt]
 type FieldOption[T any] interface {

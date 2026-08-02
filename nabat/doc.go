@@ -145,12 +145,12 @@
 // right choice when you need "working" feedback without tracking individual
 // items. Pass [WithSpinnerType] to change the animation preset.
 //
-//	err := c.Spinner("Deploying...", func(sp *nabat.Spinner) error {
+//	err := c.Spinner(func(sp *nabat.Spinner) error {
 //	    sp.SetText("Building image...")
 //	    time.Sleep(800 * time.Millisecond)
 //	    sp.SetText("Rolling out pods...")
 //	    return nil
-//	})
+//	}, nabat.WithTitle("Deploying..."))
 //
 // [Spinner.SetText] updates the header title while the work runs. On
 // completion the header shows a check icon on success and an x on error.

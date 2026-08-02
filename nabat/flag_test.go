@@ -295,7 +295,7 @@ func TestWithEnvFlagFallsBackToAlias(t *testing.T) {
 	app.MustCommand("run",
 		WithFlag("token", "", WithEnv("token"), WithEnvAlias("GH_TOKEN", "GITHUB_TOKEN")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "token")
+			v, err := c.BindAs[string]("token")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -314,7 +314,7 @@ func TestWithEnvSecondAliasUsedWhenFirstMissing(t *testing.T) {
 	app.MustCommand("run",
 		WithFlag("token", "", WithEnv("token"), WithEnvAlias("GH_TOKEN", "GITHUB_TOKEN")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "token")
+			v, err := c.BindAs[string]("token")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -333,7 +333,7 @@ func TestWithMultiSelectFlagFromCLI(t *testing.T) {
 	app.MustCommand("run",
 		WithMultiSelectFlag("regions", []string{}, []string{"us-east-1", "eu-west-1", "ap-south-1"}),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[[]string](c, "regions")
+			v, err := c.BindAs[[]string]("regions")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -367,7 +367,7 @@ func TestPersistentFlagInheritedByChild(t *testing.T) {
 	)
 	parent.MustCommand("create",
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "config")
+			v, err := c.BindAs[string]("config")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -447,7 +447,7 @@ func TestFlagFromEnvStringSlice(t *testing.T) {
 	app.MustCommand("run",
 		WithFlag("tags", []string{}, WithEnv("tags")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[[]string](c, "tags")
+			v, err := c.BindAs[[]string]("tags")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -492,7 +492,7 @@ func TestFlagShorthandWorks(t *testing.T) {
 	app.MustCommand("run",
 		WithFlag("verbose", false, WithShort('v')),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[bool](c, "verbose")
+			v, err := c.BindAs[bool]("verbose")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -510,7 +510,7 @@ func TestSelectFlagFromEnv(t *testing.T) {
 	app.MustCommand("run",
 		WithSelectFlag("env", "staging", []string{"staging", "production"}, WithEnv("env")),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "env")
+			v, err := c.BindAs[string]("env")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -544,7 +544,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "deploy",
 			runArgs: []string{"deploy"},
 			run: func(c *Context) error {
-				v, err := BindAs[string](c, "config")
+				v, err := c.BindAs[string]("config")
 				require.NoError(t, err)
 				assert.Equal(t, "default.yaml", v)
 				return nil
@@ -559,7 +559,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "deploy",
 			runArgs: []string{"deploy", "--config=prod.yaml"},
 			run: func(c *Context) error {
-				v, err := BindAs[string](c, "config")
+				v, err := c.BindAs[string]("config")
 				require.NoError(t, err)
 				assert.Equal(t, "prod.yaml", v)
 				return nil
@@ -574,7 +574,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run", "--verbose"},
 			run: func(c *Context) error {
-				v, err := BindAs[bool](c, "verbose")
+				v, err := c.BindAs[bool]("verbose")
 				require.NoError(t, err)
 				assert.True(t, v)
 				return nil
@@ -589,7 +589,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run"},
 			run: func(c *Context) error {
-				v, err := BindAs[int](c, "timeout")
+				v, err := c.BindAs[int]("timeout")
 				require.NoError(t, err)
 				assert.Equal(t, 30, v)
 				return nil
@@ -605,7 +605,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			childName:  "create",
 			runArgs:    []string{"cluster", "create"},
 			run: func(c *Context) error {
-				v, err := BindAs[time.Duration](c, "timeout")
+				v, err := c.BindAs[time.Duration]("timeout")
 				require.NoError(t, err)
 				assert.Equal(t, 10*time.Second, v)
 				return nil
@@ -620,7 +620,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run", "-v", "-v"},
 			run: func(c *Context) error {
-				v, err := BindAs[int](c, "verbose")
+				v, err := c.BindAs[int]("verbose")
 				require.NoError(t, err)
 				assert.Equal(t, 2, v)
 				return nil
@@ -635,7 +635,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run", "--tags=a,b,c"},
 			run: func(c *Context) error {
-				v, err := BindAs[[]string](c, "tags")
+				v, err := c.BindAs[[]string]("tags")
 				require.NoError(t, err)
 				assert.Equal(t, []string{"a", "b", "c"}, v)
 				return nil
@@ -662,7 +662,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run", "--regions=us-east-1,eu-west-1"},
 			run: func(c *Context) error {
-				v, err := BindAs[[]string](c, "regions")
+				v, err := c.BindAs[[]string]("regions")
 				require.NoError(t, err)
 				assert.Equal(t, []string{"us-east-1", "eu-west-1"}, v)
 				return nil
@@ -677,7 +677,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run"},
 			run: func(c *Context) error {
-				v, err := BindAs[float64](c, "ratio")
+				v, err := c.BindAs[float64]("ratio")
 				require.NoError(t, err)
 				assert.Equal(t, 0.5, v)
 				return nil
@@ -692,7 +692,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run"},
 			run: func(c *Context) error {
-				v, err := BindAs[int64](c, "size")
+				v, err := c.BindAs[int64]("size")
 				require.NoError(t, err)
 				assert.Equal(t, int64(1024), v)
 				return nil
@@ -707,7 +707,7 @@ func TestPersistentFlagsInCommands(t *testing.T) {
 			topCmd:  "run",
 			runArgs: []string{"run"},
 			run: func(c *Context) error {
-				v, err := BindAs[uint](c, "port")
+				v, err := c.BindAs[uint]("port")
 				require.NoError(t, err)
 				assert.Equal(t, uint(8080), v)
 				return nil
@@ -858,7 +858,7 @@ func TestWithDefaultGenericInt(t *testing.T) {
 	app.MustCommand("run",
 		WithFlag("count", 99),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[int](c, "count")
+			v, err := c.BindAs[int]("count")
 			require.NoError(t, err)
 			got = v
 			return nil
@@ -877,7 +877,7 @@ func TestInputPositionalDefault(t *testing.T) {
 	app.MustCommand("run",
 		WithArg("env", "production"),
 		WithRun(func(c *Context) error {
-			v, err := BindAs[string](c, "env")
+			v, err := c.BindAs[string]("env")
 			require.NoError(t, err)
 			got = v
 			return nil

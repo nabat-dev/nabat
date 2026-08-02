@@ -39,18 +39,20 @@ type statusConfig struct {
 	noElapsed   bool
 }
 
-// WithTitle sets an optional header title shown above the status rows with an
-// animated spinner while the work function runs and a completion icon when it
-// returns.
+// WithTitle sets the header title for [Context.Spinner] or [Context.Status].
+// For Status it appears above the rows with an animated spinner while the work
+// function runs and a completion icon when it returns. For Spinner it is the
+// initial animated line (and the plain line printed in the non-TTY path).
 //
 // Example:
 //
+//	c.Spinner(fn, nabat.WithTitle("Deploying"))
 //	c.Status(fn, nabat.WithTitle("Deploying"))
-func WithTitle(title string) StatusOption {
-	return statusOnlyOption(func(c *statusConfig) error {
-		c.title = title
-		return nil
-	})
+func WithTitle(title string) spinnerStatusOption {
+	return sharedOption{
+		spinnerFn: func(c *spinnerConfig) error { c.title = title; return nil },
+		statusFn:  func(c *statusConfig) error { c.title = title; return nil },
+	}
 }
 
 // WithColumns sets the column header labels shown above the status rows. The

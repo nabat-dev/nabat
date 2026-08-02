@@ -15,19 +15,28 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
+        # nixpkgs' default `go` may lag; pin the toolchain Nabat requires.
+        go = pkgs.go_1_27;
+
         graphifyApp = (import ./nix/graphifyy.nix { inherit pkgs; }).graphifyApp;
 
-        devTools = with pkgs; [
+        # Keep `go` outside `with pkgs` so the pin is not shadowed by pkgs.go.
+        devTools = [
           go
+        ]
+        ++ (with pkgs; [
           gopls
           gotools
+          # nixpkgs golangci-lint is still built with Go 1.26 and rejects go.mod
+          # 1.27 until upstream ships Go 1.27 support:
+          # https://github.com/golangci/golangci-lint/issues/6643
           golangci-lint
           markdownlint-cli
           delve
           gnumake
           git
           vhs
-        ];
+        ]);
 
         mkApp =
           { name, description, script }:
@@ -43,11 +52,19 @@
         pre-commit-check = git-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
-            gofmt.enable = true;
-            # git-hooks' default env omits `go` on PATH; golangci-lint needs it.
-            golangci-lint = {
+            # Use the pinned Go toolchain's gofmt; git-hooks' default wrapper
+            # still ships Go 1.26 and rejects generic methods.
+            gofmt = {
               enable = true;
-              extraPackages = [ pkgs.go ];
+              entry = "${go}/bin/gofmt -l -w";
+              files = "\\.go$";
+            };
+            # Disabled while go.mod is 1.27: nixpkgs golangci-lint is built with
+            # Go 1.26 and fails config load. Re-enable when
+            # https://github.com/golangci/golangci-lint/issues/6643 lands.
+            golangci-lint = {
+              enable = false;
+              extraPackages = [ go ];
             };
             markdownlint = {
               enable = true;
@@ -57,7 +74,7 @@
             go-mod-tidy = {
               enable = true;
               name = "go-mod-tidy";
-              entry = "${pkgs.go}/bin/go mod tidy";
+              entry = "${go}/bin/go mod tidy";
               files = "(\\.go|go\\.mod|go\\.sum)$";
               pass_filenames = false;
             };
@@ -101,7 +118,7 @@
             name = "fmt";
             description = "Format all Go files with gofmt";
             script = ''
-              exec ${pkgs.go}/bin/gofmt -w .
+              exec ${go}/bin/gofmt -w .
             '';
           };
 
@@ -109,7 +126,7 @@
             name = "fmt-check";
             description = "Fail if any Go file needs gofmt (lists paths)";
             script = ''
-              out=$(${pkgs.go}/bin/gofmt -l .)
+              out=$(${go}/bin/gofmt -l .)
               if [ -n "$out" ]; then
                 echo "::error::Unformatted Go files:" >&2
                 echo "$out" >&2
@@ -122,10 +139,12 @@
             name = "tidy";
             description = "Run go mod tidy for the module";
             script = ''
-              exec ${pkgs.go}/bin/go mod tidy
+              exec ${go}/bin/go mod tidy
             '';
           };
 
+          # golangci-lint apps stay wired for when Go 1.27 support ships:
+          # https://github.com/golangci/golangci-lint/issues/6643
           lint = mkApp {
             name = "lint";
             description = "Run golangci-lint";
@@ -154,7 +173,7 @@
             name = "test";
             description = "Run unit tests with -shuffle=on";
             script = ''
-              exec ${pkgs.go}/bin/go test -shuffle=on ./...
+              exec ${go}/bin/go test -shuffle=on ./...
             '';
           };
 
@@ -164,7 +183,7 @@
             script = ''
               mkdir -p docs/assets bin
               for dir in examples/*/; do
-                ${pkgs.go}/bin/go build -o "bin/$(basename "$dir")" "./$dir"
+                ${go}/bin/go build -o "bin/$(basename "$dir")" "./$dir"
               done
               export PATH="$PWD/bin:$PATH"
               for tape in docs/tapes/*.tape; do
@@ -200,7 +219,7 @@
               # Nix Go only (go#75031). Example mains under examples/ are not test packages; including
               # them in one -coverpkg=./... run triggers "no such tool covdata" in CI.
               export GOTOOLCHAIN=local
-              go="${pkgs.go}/bin/go"
+              go="${go}/bin/go"
               mapfile -t testpkgs < <("$go" list ./... | grep -vE '/examples(/|$)' || true)
               if [ ''${#testpkgs[@]} -eq 0 ]; then
                 echo "go list: no packages after excluding examples/" >&2

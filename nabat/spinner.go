@@ -121,6 +121,7 @@ type statusOnlyOption func(*statusConfig) error
 func (f statusOnlyOption) applyStatus(c *statusConfig) error { return f(c) }
 
 type spinnerConfig struct {
+	title       string
 	spinnerType SpinnerType
 	icons       Icons
 }
@@ -130,7 +131,7 @@ type spinnerConfig struct {
 //
 // Example:
 //
-//	c.Spinner("Deploying", fn, WithSpinnerType(SpinnerDots()))
+//	c.Spinner(fn, WithTitle("Deploying"), WithSpinnerType(SpinnerDots()))
 //	c.Status(fn, WithTitle("Deploying"), WithSpinnerType(SpinnerDots()))
 func WithSpinnerType(t SpinnerType) spinnerStatusOption {
 	return sharedOption{
@@ -146,7 +147,7 @@ func WithSpinnerType(t SpinnerType) spinnerStatusOption {
 //
 // Example:
 //
-//	c.Spinner("Deploying", fn, WithSpinnerIcons(Icons{
+//	c.Spinner(fn, WithTitle("Deploying"), WithSpinnerIcons(Icons{
 //	    Success: "+",
 //	    Error:   "x",
 //	}))
@@ -210,7 +211,13 @@ func (s *Spinner) completionState(fnErr error) RowState {
 //   - [*ConfigErrors] from option validation
 //   - [context.Canceled] when the user interrupts with ctrl+c or the context
 //     is canceled
-func (c *Context) Spinner(title string, fn func(*Spinner) error, opts ...SpinnerOption) error {
+//
+// Pass [WithTitle] for the initial header text. The signature matches
+// [Context.Status]: callback first, then options.
+func (c *Context) Spinner(fn func(*Spinner) error, opts ...SpinnerOption) error {
+	// Callback-first avoids a go1.27 printf-vet false positive when Context
+	// also has generic methods (title string was treated as a format).
+
 	cfg := &spinnerConfig{spinnerType: SpinnerDots()}
 	var errs ConfigErrors
 	for i, opt := range opts {
@@ -227,7 +234,7 @@ func (c *Context) Spinner(title string, fn func(*Spinner) error, opts ...Spinner
 	}
 
 	handle := &Spinner{
-		text:  title,
+		text:  cfg.title,
 		icons: cfg.icons,
 		th:    c.app.Theme(),
 		start: time.Now(),
@@ -235,8 +242,8 @@ func (c *Context) Spinner(title string, fn func(*Spinner) error, opts ...Spinner
 
 	// Non-TTY path: print title and run fn with no animation.
 	if !c.io.IsStderrTTY() {
-		if title != "" {
-			if _, err := fmt.Fprintln(c.io.ErrOut, title); err != nil {
+		if cfg.title != "" {
+			if _, err := fmt.Fprintln(c.io.ErrOut, cfg.title); err != nil {
 				return err
 			}
 		}

@@ -34,13 +34,13 @@ func TestBindAs(t *testing.T) {
 		nabat.WithArg("name", "world"),
 		nabat.WithFlag("count", 42),
 		nabat.WithRun(func(c *nabat.Context) error {
-			name, err := nabat.BindAs[string](c, "name")
+			name, err := c.BindAs[string]("name")
 			require.NoError(t, err)
 			assert.Equal(t, "world", name)
-			count, err := nabat.BindAs[int](c, "count")
+			count, err := c.BindAs[int]("count")
 			require.NoError(t, err)
 			assert.Equal(t, 42, count)
-			_, err = nabat.BindAs[int](c, "missing")
+			_, err = c.BindAs[int]("missing")
 			require.Error(t, err)
 			return nil
 		}),
@@ -66,7 +66,7 @@ func TestWithCountFlag(t *testing.T) {
 	app.MustCommand("run",
 		nabat.WithFlag("verbose", 0, nabat.WithShort('v'), nabat.WithCount()),
 		nabat.WithRun(func(c *nabat.Context) error {
-			v, err := nabat.BindAs[int](c, "verbose")
+			v, err := c.BindAs[int]("verbose")
 			require.NoError(t, err)
 			got = v
 			return nil

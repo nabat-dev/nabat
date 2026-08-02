@@ -45,7 +45,7 @@ system.
 ### Supporting topics
 
 - [Help heading wording: "Global Flags" vs "Inherited Flags"](#help-heading-wording-global-flags-vs-inherited-flags)
-- [Spinner takes `func() error`](#spinner-takes-func-error)
+- [Spinner takes `func(*Spinner) error`](#spinner-takes-funcspinner-error)
 
 ### Reference
 
@@ -472,12 +472,11 @@ fields.
 
 **Select and MultiSelect:**
 
-`Select[E]` and `MultiSelect[E]` are package-level generic functions (not methods)
-because Go does not allow type parameters on methods. They take a typed
-positional `defaultVal E` (not a `WithDefault` sub-option) because
-`SelectOption` cannot be satisfied by `FieldOption[E]`. The positional parameter
-keeps compile-time `E` checking: passing an `int` where a typed enum is expected
-is a build error.
+`Context.Select[E]` and `Context.MultiSelect[E]` are generic methods (Go 1.27+).
+They take a typed positional `defaultVal E` (not a `WithDefault` sub-option)
+because `SelectOption` cannot be satisfied by `FieldOption[E]`. The positional
+parameter keeps compile-time `E` checking: passing an `int` where a typed enum
+is expected is a build error.
 
 **`WithSelectField` / `WithMultiSelectField`:**
 
@@ -493,7 +492,7 @@ in a consistent way:
 - **Sub-option:** `WithDefault[T any](v T)` for `FieldOption[T]` sites (form
   fields, ad-hoc prompts, arg prompt options). `T` is inferred from the value.
 - **Positional:** `defaultVal E` for select constructors (`WithSelectField`,
-  `WithMultiSelectField`, `nabat.Select`, `nabat.MultiSelect`) where a
+  `WithMultiSelectField`, `Context.Select`, `Context.MultiSelect`) where a
   sub-option cannot carry the same type relationship.
 
 Declarative args use only a positional `defaultVal` on `WithArg` / `WithSelectArg`
@@ -851,14 +850,15 @@ and Go context state (cancellation, deadlines). Callers must not store a
 `*Context` past the handler's lifetime, the same rule that applies to
 `http.Request.Context()`.
 
-## Spinner takes `func() error`
+## Spinner takes `func(*Spinner) error`
 
-The `Spinner` callback signature is `func() error` with no `*Context` argument:
+The `Spinner` callback signature is `func(*Spinner) error` with no `*Context`
+argument:
 
 ```go
-c.Spinner("Deploying", func() error {
+c.Spinner(func(sp *nabat.Spinner) error {
     return deploy(c)
-})
+}, nabat.WithTitle("Deploying"))
 ```
 
 This shape works well because:

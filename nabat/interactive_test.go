@@ -36,14 +36,14 @@ func TestAdhocInputMethodsRequireInteractiveTerminal(t *testing.T) {
 		}
 		// Select and MultiSelect now accept a fallback and succeed in
 		// non-interactive mode; verify they return the fallback.
-		env, err := Select(c, "env", []string{"staging", "production"}, "staging")
+		env, err := c.Select("env", []string{"staging", "production"}, "staging")
 		if err != nil {
 			t.Fatalf("expected Select to succeed with fallback in non-interactive mode, got: %v", err)
 		}
 		if env != "staging" {
 			t.Fatalf("expected Select to return fallback 'staging', got: %q", env)
 		}
-		targets, err := MultiSelect(c, "targets", []string{"a", "b"}, []string{"a"})
+		targets, err := c.MultiSelect("targets", []string{"a", "b"}, []string{"a"})
 		if err != nil {
 			t.Fatalf("expected MultiSelect to succeed with fallback in non-interactive mode, got: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestPromptOptionValidationAggregatesConfigErrors(t *testing.T) {
 		{
 			name: "Select non-positive height",
 			run: func(c *Context) error {
-				_, err := Select(c, "env", []string{"a", "b"}, "a", WithHeight(-1))
+				_, err := c.Select("env", []string{"a", "b"}, "a", WithHeight(-1))
 				return err
 			},
 			substr: "WithHeight",
@@ -113,7 +113,7 @@ func TestPromptOptionValidationAggregatesConfigErrors(t *testing.T) {
 		{
 			name: "MultiSelect non-positive limit",
 			run: func(c *Context) error {
-				_, err := MultiSelect(c, "targets", []string{"a"}, nil, WithLimit(0))
+				_, err := c.MultiSelect("targets", []string{"a"}, nil, WithLimit(0))
 				return err
 			},
 			substr: "WithLimit",
