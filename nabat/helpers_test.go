@@ -37,6 +37,15 @@ func testIO() (*IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
 	return NewIO(in, out, errOut), in, out, errOut
 }
 
+// testTTYIO is like [testIO] but marks all three streams as terminals.
+func testTTYIO() (*IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
+	ios, in, out, errOut := testIO()
+	ios.SetStdinTTY(true)
+	ios.SetStdoutTTY(true)
+	ios.SetStderrTTY(true)
+	return ios, in, out, errOut
+}
+
 // runConfig holds optional knobs for [Run]. Fields are populated by
 // [runOption] values and consumed by [Run]. Currently empty; the type is
 // retained so adding knobs (timeouts, ctx, etc.) does not change the [Run]

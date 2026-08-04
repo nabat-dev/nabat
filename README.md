@@ -34,8 +34,11 @@
     - [Deprecation](#deprecation)
   - [Binding resolved values](#binding-resolved-values)
   - [Prompts](#prompts)
+    - [Destructive confirmations](#destructive-confirmations)
   - [Lifecycle Hooks](#lifecycle-hooks)
   - [Semantic Output](#semantic-output)
+    - [Aligned Fields](#aligned-fields)
+    - [Badge](#badge)
   - [Structured Output](#structured-output)
   - [Interactive Output](#interactive-output)
     - [Spinner](#spinner)
@@ -44,6 +47,7 @@
   - [Version](#version)
   - [Shell Completion](#shell-completion)
   - [Themes](#themes)
+    - [Theme access in commands](#theme-access-in-commands)
   - [Errors](#errors)
   - [Common Pitfalls](#common-pitfalls)
 - [Extensions](#extensions)
@@ -104,11 +108,12 @@ Read more in the [Brand Story](#brand-story).
 - **Shell completion.** Bash, Zsh, Fish, PowerShell – one line: `WithCompletion()`.
 - **Semantic output.** `c.Success`, `c.Warn`, `c.Error`, `c.Info` -- each goes to the right stream and uses the theme.
 - **Structured output.** `c.Table`, `c.List`, `c.Tree`, `c.JSON`, `c.YAML`, `c.TOML`, `c.Encode`, `c.Highlight`, `c.Markdown`, `c.ProgressBar`.
-- **Interactive layer.** `c.Spinner` (single-line animation), `c.Status` (multi-row live display with labels, priority sorting, column headers, and per-row icons), `c.Confirm`, and `c.Form` -- all built on [Huh](https://pkg.go.dev/charm.land/huh/v2) (`charm.land/huh/v2`).
-- **Twelve built-in themes.** Popular light and dark palettes (including Catppuccin, Dracula, Gruvbox, Nord, and Solarized) plus the Nabat brand theme. You can change one token at a time or bring a full custom theme.
+- **Interactive layer.** `c.Spinner` (delayed single-line animation, no TUI probe leaks on fast paths), `c.Status` (multi-row live display with labels, priority sorting, column headers, and per-row icons), `c.Confirm`, and `c.Form` -- all built on [Huh](https://pkg.go.dev/charm.land/huh/v2) (`charm.land/huh/v2`). Seed widgets with `WithInitial` / `WithPrefill`; non-interactive fallbacks stay on `WithDefault`.
+- **Product chrome.** `c.Fields` for aligned key/value blocks and `c.Badge` for typed status chips (`IconSuccess`, `IconError`, ...).
+- **Twelve built-in themes.** Popular light and dark palettes (including Catppuccin, Dracula, Gruvbox, Nord, and Solarized) plus the Nabat brand theme. Access the active theme from a RunFunc via `c.Theme()`, `c.Style()`, and `c.Render()`.
 - **Pipe-friendly by default.** Honors `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`, and TTY detection.
 - **Fail fast.** Setup errors come back together as one `*ConfigErrors` from `New`.
-- **Test helpers.** The `nabattest` package runs your CLI inside `*testing.T` with explicit args.
+- **Test helpers.** The `nabattest` package runs your CLI inside `*testing.T` with explicit args, plus `Capture` and `Context` helpers for output and helper-unit tests.
 
 ---
 
@@ -130,7 +135,7 @@ import (
     "nabat.dev/theme"      // theme constants and recipes
     "nabat.dev/manpage"    // man page generation (extension)
     "nabat.dev/logging"    // themed slog logger (extension)
-    "nabat.dev/nabat/nabattest"  // test helpers: NewIO, NewTTYIO, Run, RunParallel
+    "nabat.dev/nabat/nabattest"  // test helpers: NewIO, NewTTYIO, Run, Capture, Context
 )
 ```
 
@@ -600,7 +605,67 @@ nabat.WithArg("cert", "",
 
 Kind-specific sub-options ([WithAffirmative], [WithEditor], [WithFilePicker], etc.)
 are compile-time enforced: passing [WithEditor] to a bool field is a build error.
-[WithDefault] and [WithValidate] are generic — T is inferred from the value.
+[WithDefault], [WithInitial], [WithPrefill], and [WithValidate] are generic — T is inferred from the value.
+
+**Initial values vs defaults:**
+
+| Option | Interactive (TTY) | Non-interactive (CI / pipe) |
+|--------|-------------------|-----------------------------|
+| `WithDefault(v)` | no effect on the widget | returns `v` |
+| `WithInitial(v)` | widget starts at `v` | no effect (still errors if required) |
+| `WithPrefill(v)` | widget starts at `v` | returns `v` |
+
+```go
+// Form field: seed both environments with one option.
+var minReplicas string
+err := c.Form(
+    nabat.WithFormField(&minReplicas, "Minimum Replicas", "...",
+        nabat.WithPrefill("2"),
+    ),
+)
+
+// Confirm: cursor starts on Yes; CI without --force fails closed.
+ok, err := c.Confirm("Overwrite deployah.yaml?",
+    nabat.WithAffirmative("Yes, overwrite"),
+    nabat.WithNegative("No, cancel"),
+    nabat.WithInitial(true),
+    nabat.WithDefault(false),
+)
+```
+
+#### Destructive confirmations
+
+For destructive commands, prefer an explicit bypass over a silent default:
+
+| Danger | Guard | Bypass |
+|--------|-------|--------|
+| Moderate | y/N prompt | `WithYes(flags.Yes)` from `--yes` |
+| Severe | type the resource name | `WithConfirmValue` + `WithConfirmInput` from `--confirm=` |
+
+`WithYes` does not bypass type-to-confirm. When `WithConfirmValue` is set,
+only a matching `WithConfirmInput` (or an interactive match) proceeds;
+`WithDefault` is ignored in that mode too.
+
+```go
+// Moderate: require --yes in CI.
+ok, err := c.Confirm("Delete release?",
+    nabat.WithYes(flags.Yes),
+    nabat.WithBypassHint("--yes"),
+)
+if errors.Is(err, nabat.ErrConfirmationRequired) {
+    return err
+}
+
+// Severe: Heroku-style type-to-confirm (--yes alone is not enough).
+ok, err := c.Confirm("This will delete production including all data.",
+    nabat.WithConfirmValue("production"),
+    nabat.WithConfirmInput(flags.Confirm),
+    nabat.WithBypassHint("--confirm=production"),
+)
+```
+
+Without a bypass, non-interactive Confirm returns `*ConfirmationError` wrapping
+`ErrConfirmationRequired` (not a raw "requires interactive terminal" string).
 
 ### Lifecycle Hooks
 
@@ -670,6 +735,44 @@ c.Println("with newline")
 c.Printf("hello %s\n", name)
 ```
 
+#### Aligned Fields
+
+`c.Fields` builds an aligned key/value block for status-like product output.
+Keys use the `TextMuted` theme token. Padding is applied before styling so ANSI
+width does not break alignment. The result is a `FieldBlock` with `String()`
+(for composition) and `Print()` (write to stdout):
+
+```go
+c.Fields([]nabat.Field{
+    {Key: "Backend", Value: "kind (docker)"},
+    {Key: "Context", Value: "kind-deployah"},
+    {Key: "Cloud provider", Value: c.Badge(nabat.IconSuccess, "running")},
+}, nabat.WithFieldKeyWidth(14)).Print()
+```
+
+#### Badge
+
+`c.Badge` renders a styled status chip (icon glyph + label). Apps own the
+word-to-icon mapping. Nabat ships typed icon constants (glyph defaults match
+Spinner/Status); use `nabat.NewIcon` for custom chrome. `WithSpinnerIcons`
+does not change Badge output.
+
+| Constant | Glyph | Token |
+|----------|-------|-------|
+| `nabat.IconSuccess` | ✓ | `status.success` |
+| `nabat.IconError` | ✗ | `status.error` |
+| `nabat.IconWarning` | ! | `status.warning` |
+| `nabat.IconInfo` | • | `status.info` |
+| `nabat.IconUnknown` | ? | `text.muted` |
+
+`IconInfo` is a product chrome chip. It is distinct from `c.Info`, which writes
+a diagnostic message to stderr.
+
+```go
+c.Printf("%s %s\n", c.Render(theme.TextTitle, view.Name), c.Badge(nabat.IconSuccess, "running"))
+c.Badge(nabat.NewIcon("★", theme.AccentPrimary), "featured")
+```
+
 ### Structured Output
 
 These helpers write structured data to stdout.
@@ -718,10 +821,19 @@ c.TOML(data)                      // writes TOML to stdout
 c.Encode(data, nabat.FormatJSON)  // same as c.JSON(data)
 ```
 
-**Syntax highlighting and Markdown:**
+**Encode / highlight layers** (when the app owns the schema):
 
 ```go
-c.Highlight(code, "go")          // syntax-highlighted code to stdout
+raw, err := nabat.Marshal(view, nabat.FormatJSON)   // bytes only
+styled := c.HighlightString(string(raw), "json")    // string in, string out
+_ = c.FprintHighlight(customWriter, string(raw), "json")
+_ = c.PrintHighlight(string(raw), "json")           // to stdout
+_ = c.Highlight(code, "go")                         // same as PrintHighlight
+```
+
+**Markdown:**
+
+```go
 c.Markdown("# Hello\nworld")     // rendered Markdown to stdout
 ```
 
@@ -741,6 +853,12 @@ bar.Done()
 
 `c.Spinner` shows a single animated line while work happens. It is the right
 choice when you need "working" feedback without tracking individual items.
+The spinner uses a lightweight ANSI rewrite (not Bubble Tea), so short-lived
+work never leaks terminal capability-probe replies onto the next shell prompt.
+
+Animation starts only after a short delay (default **200ms**; override with
+`WithSpinnerDelay`). If work finishes before the delay, Spinner prints a static
+success or error line on stderr and never animates.
 
 ```go
 err := c.Spinner(func(sp *nabat.Spinner) error {
@@ -749,7 +867,10 @@ err := c.Spinner(func(sp *nabat.Spinner) error {
     time.Sleep(800 * time.Millisecond)
     sp.SetText("Rolling out pods...")
     return nil
-}, nabat.WithTitle("Connecting to cluster..."), nabat.WithSpinnerType(nabat.SpinnerDots()))
+}, nabat.WithTitle("Connecting to cluster..."),
+   nabat.WithSpinnerType(nabat.SpinnerDots()),
+   nabat.WithSpinnerDelay(200*time.Millisecond),
+)
 ```
 
 `SetText` updates the header title while the work runs. The header shows a
@@ -1177,6 +1298,24 @@ app, _ := nabat.New("myctl", nabat.WithCustomTheme(acme))
 
 Full guide: [docs/themes.md](docs/themes.md).
 
+#### Theme access in commands
+
+Inside a `RunFunc`, read the active theme from the context instead of closing over `*App`:
+
+```go
+nabat.WithRun(func(c *nabat.Context) error {
+    th := c.Theme()                         // theme.ResolvedTheme
+    muted := c.Style(theme.TextMuted)       // lipgloss.Style
+    line := c.Render(theme.StatusSuccess, "No changes.")
+    c.Println(line)
+    _ = th
+    _ = muted
+    return nil
+})
+```
+
+`c.Theme()` matches `app.Theme()` for the same app. `Render` applies theme styles; `NO_COLOR` / non-TTY stripping stays on the IO writers that print the string.
+
 ### Errors
 
 `nabat.New` returns a `*ConfigErrors` when one or more options fail.
@@ -1349,6 +1488,24 @@ func TestDeploy(t *testing.T) {
 
 `nabattest.NewIO()` returns four values: the IO bundle and individual `*bytes.Buffer` values for stdin (`in`), stdout (`out`), and stderr (`errOut`). Discard those you do not need with `_`.
 
+**Capture** returns buffers and the run error in one value (app must use `NewIO` / `NewTTYIO`):
+
+```go
+got := nabattest.Capture(t, app, []string{"deploy"})
+require.NoError(t, got.Err)
+require.Contains(t, got.Stderr.String(), "deployed")
+```
+
+**Context** builds a `*nabat.Context` for testing helpers without a full command run (wraps `App.NewBareContext` and binds the test lifecycle):
+
+```go
+io, _, out, _ := nabattest.NewIO()
+app := nabat.MustNew("myctl", nabat.WithIO(io))
+c := nabattest.Context(t, app)
+c.Fields([]nabat.Field{{Key: "Backend", Value: "kind"}}).Print()
+require.Contains(t, out.String(), "Backend")
+```
+
 Test run options:
 
 | Option                       | What it does                               |
@@ -1392,7 +1549,7 @@ go run ./examples/deploy deploy --help
 | Package                                            | Role                                                                                                             |
 |----------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | [`nabat.dev/nabat`](nabat)                         | Core: `App`, `Command`, `Context`, `IOStreams`, args, flags, output, prompts, themes, help, version, completion. |
-| [`nabat.dev/nabat/nabattest`](nabat/nabattest)     | Test helpers (nested under core): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`.                                     |
+| [`nabat.dev/nabat/nabattest`](nabat/nabattest)     | Test helpers (nested under core): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`, `Capture`, `Context`.               |
 | [`nabat.dev/theme`](theme)                         | Theme primitives, built-in catalog, JSON Schema, name constants.                                                 |
 | [`nabat.dev/manpage`](manpage)                     | Extension: `man` subcommand for roff man page generation.                                                        |
 | [`nabat.dev/logging`](logging)                     | Extension: themed `*slog.Logger` with `--verbose` / `--log-level` flag wiring.                                   |

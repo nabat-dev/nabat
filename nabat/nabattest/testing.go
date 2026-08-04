@@ -158,6 +158,83 @@ func runInternal(tb testing.TB, app *nabat.App, args []string, parallel bool, op
 // setProcessEnv mutates os env directly and returns a restore func. Used only
 // when [Run] has no [testing.TB] (examples); tests go through [testing.TB.Setenv]
 // so that a caller of [WithEnvVars] cannot also call [testing.T.Parallel].
+// CaptureResult holds the captured output from [Capture].
+type CaptureResult struct {
+	// Stdout is the app's stdout buffer when the app was built with [NewIO]
+	// or [NewTTYIO]; nil otherwise.
+	Stdout *bytes.Buffer
+	// Stderr is the app's stderr buffer when the app was built with [NewIO]
+	// or [NewTTYIO]; nil otherwise.
+	Stderr *bytes.Buffer
+	// Err is the error returned by the command run.
+	Err error
+}
+
+// Capture runs app with args and returns the captured stdout/stderr buffers
+// plus any error. The app must have been constructed with [NewIO] or
+// [NewTTYIO] (via [nabat.WithIO]) so the buffers are recoverable.
+//
+// Example:
+//
+//	io, _, _, _ := nabattest.NewIO()
+//	app := nabat.MustNew("myctl", nabat.WithIO(io), ...)
+//	got := nabattest.Capture(t, app, []string{"plan"})
+//	require.NoError(t, got.Err)
+//	require.Contains(t, got.Stdout.String(), "...")
+func Capture(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) CaptureResult {
+	if tb != nil {
+		tb.Helper()
+	}
+	result := CaptureResult{}
+	if app != nil {
+		if ios := app.IO(); ios != nil {
+			if b, ok := ios.RawOut().(*bytes.Buffer); ok {
+				result.Stdout = b
+			}
+			if b, ok := ios.RawErrOut().(*bytes.Buffer); ok {
+				result.Stderr = b
+			}
+		}
+	}
+	result.Err = Run(tb, app, args, opts...)
+	return result
+}
+
+// Context returns a [*nabat.Context] suitable for testing helpers that operate
+// on a Context directly (for example [nabat.Context.Badge],
+// [nabat.Context.Fields], [nabat.Context.Render]). It wraps
+// [nabat.App.NewBareContext] and binds the underlying [context.Context] to the
+// test lifecycle when tb is non-nil.
+//
+// Pass [WithContext] to set the underlying [context.Context].
+//
+// Example:
+//
+//	io, _, out, _ := nabattest.NewIO()
+//	app := nabat.MustNew("myctl", nabat.WithIO(io))
+//	c := nabattest.Context(t, app)
+//	c.Fields([]nabat.Field{{Key: "K", Value: "V"}}).Print()
+//	require.Contains(t, out.String(), "K")
+func Context(tb testing.TB, app *nabat.App, opts ...RunOption) *nabat.Context {
+	if tb != nil {
+		tb.Helper()
+	}
+	cfg := runConfig{ctx: context.Background()}
+	if tb != nil {
+		cfg.ctx = tb.Context()
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
+	}
+	c := app.NewBareContext()
+	if c != nil {
+		c.SetContext(cfg.ctx)
+	}
+	return c
+}
+
 func setProcessEnv(values map[string]string) (func(), error) {
 	restore := make([]func(), 0, len(values))
 	undo := func() {

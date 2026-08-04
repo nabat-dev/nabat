@@ -15,6 +15,8 @@
 package nabat
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -178,4 +180,86 @@ func TestJSONMarshalError(t *testing.T) {
 	err := Run(t, app, []string{"test"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "json encoding failed")
+}
+
+func TestMarshalJSON(t *testing.T) {
+	t.Parallel()
+	b, err := Marshal(map[string]string{"name": "nabat"}, FormatJSON)
+	require.NoError(t, err)
+	var got map[string]string
+	require.NoError(t, json.Unmarshal(b, &got))
+	assert.Equal(t, "nabat", got["name"])
+	assert.Contains(t, string(b), "\n", "JSON should be indented")
+}
+
+func TestMarshalYAML(t *testing.T) {
+	t.Parallel()
+	b, err := Marshal(map[string]string{"name": "nabat"}, FormatYAML)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), "name")
+	assert.Contains(t, string(b), "nabat")
+}
+
+func TestMarshalUnknownFormat(t *testing.T) {
+	t.Parallel()
+	_, err := Marshal(nil, Format(99))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown format")
+}
+
+func TestHighlightStringReturnsStyledCode(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app := MustNew("test", WithIO(io), WithTheme(theme.Nabat))
+	var got string
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		got = c.HighlightString(`{"key": "value"}`, "json")
+		return nil
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	assert.Contains(t, got, "key")
+	assert.Contains(t, got, "value")
+	// Nabat theme enables chroma; expect ANSI escapes.
+	assert.Contains(t, got, "\033[")
+}
+
+func TestHighlightStringUnknownLangReturnsPlain(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app := MustNew("test", WithIO(io), WithTheme(theme.Nabat))
+	var got string
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		got = c.HighlightString("plain text", "nonexistent-lang-xyz")
+		return nil
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	assert.Equal(t, "plain text", got)
+}
+
+func TestFprintHighlightWritesToWriter(t *testing.T) {
+	t.Parallel()
+
+	io, _, stdout, _ := testIO()
+	app := MustNew("test", WithIO(io))
+	var buf bytes.Buffer
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		return c.FprintHighlight(&buf, "hello", "go")
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	assert.Contains(t, buf.String(), "hello")
+	assert.Empty(t, stdout.String(), "FprintHighlight must not write to Out")
+}
+
+func TestPrintHighlightWritesToOut(t *testing.T) {
+	t.Parallel()
+
+	io, _, stdout, _ := testIO()
+	app := MustNew("test", WithIO(io))
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		return c.PrintHighlight("payload", "json")
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	assert.Contains(t, stdout.String(), "payload")
 }

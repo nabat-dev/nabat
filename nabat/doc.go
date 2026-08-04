@@ -133,7 +133,8 @@
 //	    ),
 //	)
 //
-// [WithDefault] sets the non-interactive fallback value; T is inferred from the
+// [WithDefault] sets the non-interactive fallback value; [WithInitial] seeds
+// the interactive TTY widget; [WithPrefill] sets both. T is inferred from the
 // value. Select fields use the positional defaultVal parameter instead, which
 // keeps compile-time E-type checking. [WithFormNote] adds display-only
 // instructional text. [WithOptionsFunc] provides dynamic select choices.
@@ -143,7 +144,9 @@
 //
 // [Context.Spinner] shows a single animated line while work happens. It is the
 // right choice when you need "working" feedback without tracking individual
-// items. Pass [WithSpinnerType] to change the animation preset.
+// items. Animation starts after a short delay (see [WithSpinnerDelay]); faster
+// completions print a static success/error line. Pass [WithSpinnerType] to
+// change the animation preset.
 //
 //	err := c.Spinner(func(sp *nabat.Spinner) error {
 //	    sp.SetText("Building image...")

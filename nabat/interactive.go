@@ -90,6 +90,7 @@ func (c *Context) Input(prompt string, opts ...FieldOption[string]) (string, err
 		return v, nil
 	}
 	var out string
+	applyInitial(&out, pc)
 	f := buildInputField(&out, pc)
 	if runErr := c.app.runPromptField(f); runErr != nil {
 		return "", runErr
@@ -99,24 +100,71 @@ func (c *Context) Input(prompt string, opts ...FieldOption[string]) (string, err
 
 // Confirm asks a yes/no question when [Context.IsInteractive] is true.
 //
+// Bypass and safety options:
+//   - [WithConfirmValue] / [WithConfirmInput] implement type-to-confirm
+//     (Heroku-style `--confirm=name`) for severe destructive actions.
+//     When [WithConfirmValue] is set, [WithYes] does not bypass the check:
+//     the typed or flag value must still match. [WithDefault] is also
+//     ignored in that mode.
+//   - [WithYes] skips a moderate (y/N) confirm when the app's `--yes` flag
+//     is set. Use it only when [WithConfirmValue] is not set.
+//   - [WithBypassHint] customizes the [ConfirmationError] message
+//   - [WithDefault] supplies a non-interactive fallback for moderate
+//     confirms when no type-to-confirm is configured
+//
 // Errors:
-//   - "nabat: confirm requires interactive terminal" when not interactive and
-//     no [WithDefault] is set
+//   - [*ConfirmationError] (wrapping [ErrConfirmationRequired]) when not
+//     interactive and neither a matching [WithConfirmInput], [WithYes]
+//     (moderate only), nor [WithDefault] allows the call to proceed
 //   - [*ConfigErrors] from option validation
 //   - errors from the prompt layer
 func (c *Context) Confirm(prompt string, opts ...FieldOption[bool]) (bool, error) {
-	pc, err := runAdhocPromptConfig(c, "confirm", prompt, opts)
-	if err != nil {
+	// Apply options without the early non-interactive fallback path so
+	// WithYes / WithConfirmValue can run first.
+	var pc promptConfig
+	if err := applyFieldOptions("confirm", opts, &pc); err != nil {
 		return false, err
 	}
-	if !c.interactive {
-		v, ok := pc.fallback.(bool)
-		if !ok {
-			return false, fmt.Errorf("nabat: confirm: expected bool default, got %T", pc.fallback)
+	pc.text = prompt
+
+	// Severe path first: type-to-confirm is never skipped by WithYes.
+	if pc.confirmValue != "" {
+		if pc.confirmInput == pc.confirmValue {
+			return true, nil
 		}
-		return v, nil
+		if !c.interactive {
+			return false, confirmationError(prompt, pc.bypassHint)
+		}
+		typePrompt := fmt.Sprintf("Type %q to confirm", pc.confirmValue)
+		typed, err := c.Input(typePrompt, WithValidate(func(s string) error {
+			if s != pc.confirmValue {
+				return fmt.Errorf("expected %q", pc.confirmValue)
+			}
+			return nil
+		}))
+		if err != nil {
+			return false, err
+		}
+		return typed == pc.confirmValue, nil
 	}
+
+	if pc.bypassYes {
+		return true, nil
+	}
+
+	if !c.interactive {
+		if pc.hasFallback {
+			v, ok := pc.fallback.(bool)
+			if !ok {
+				return false, fmt.Errorf("nabat: confirm: expected bool default, got %T", pc.fallback)
+			}
+			return v, nil
+		}
+		return false, confirmationError(prompt, pc.bypassHint)
+	}
+
 	var out bool
+	applyInitial(&out, pc)
 	f := buildConfirmField(&out, pc)
 	if runErr := c.app.runPromptField(f); runErr != nil {
 		return false, runErr
@@ -149,6 +197,7 @@ func (c *Context) TextInput(prompt string, opts ...FieldOption[string]) (string,
 		return v, nil
 	}
 	var out string
+	applyInitial(&out, pc)
 	f := buildTextField(&out, pc)
 	if runErr := c.app.runPromptField(f); runErr != nil {
 		return "", runErr
@@ -180,6 +229,7 @@ func (c *Context) FilePicker(prompt string, opts ...FieldOption[string]) (string
 		return v, nil
 	}
 	var out string
+	applyInitial(&out, pc)
 	f := buildFileField(&out, pc)
 	if runErr := c.app.runPromptField(f); runErr != nil {
 		return "", runErr

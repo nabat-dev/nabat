@@ -52,12 +52,16 @@ const (
 )
 
 // Icons configures the symbols shown for each terminal [RowState] in a
-// [Status] or [Spinner] display. All fields fall back to Unicode symbols when
-// left empty; only set the fields you want to override.
+// [Status] or [Spinner] display. Product chrome chips use the separate
+// [Icon] type ([IconSuccess], [NewIcon], …); [WithSpinnerIcons] does not
+// change [Context.Badge] output.
+//
+// All fields fall back to Unicode symbols when left empty; only set the
+// fields you want to override.
 //
 // Example:
 //
-//	nabat.WithStatusIcons(nabat.Icons{Success: "+", Error: "x"})
+//	nabat.WithSpinnerIcons(nabat.Icons{Success: "+", Error: "x"})
 type Icons struct {
 	// Success is the icon for [RowSuccess] rows. Default: "✓".
 	Success string

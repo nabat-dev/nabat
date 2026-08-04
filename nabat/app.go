@@ -769,6 +769,36 @@ func (a *App) IO() *IOStreams {
 	return a.io
 }
 
+// NewBareContext returns a [*Context] wired to the app's current [IOStreams]
+// and theme, without resolved args, flags, or command binding.
+//
+// Use it when you need themed output or Context helpers outside a [RunFunc],
+// for example shutdown hooks, background work, or unit tests that exercise
+// helpers such as [Context.Badge], [Context.Fields], or
+// [Context.HighlightString]. Prefer [nabattest.Context] in tests; it wraps
+// this method and binds the underlying [context.Context] to the test
+// lifecycle.
+func (a *App) NewBareContext() *Context {
+	if a == nil {
+		return nil
+	}
+	ctx := &Context{
+		ctx:         context.Background(),
+		app:         a,
+		io:          a.io,
+		values:      map[string]any{},
+		set:         map[string]bool{},
+		interactive: false,
+	}
+	if a.io != nil {
+		ctx.interactive = a.io.IsInteractive()
+	}
+	if a.cfg.logger != nil {
+		ctx.logger = a.cfg.logger
+	}
+	return ctx
+}
+
 // OnPreRun registers a global pre-run hook that fires before every command's
 // handler, in registration order. Global hooks run before the command's own
 // preRun hooks. The framework manages ordering; extensions never need to
@@ -827,8 +857,7 @@ func New(name string, opts ...Option) (*App, error) {
 		}
 	}
 	if err := cfg.validate(); err != nil {
-		var cErrs *ConfigErrors
-		if errors.As(err, &cErrs) {
+		if cErrs, ok := errors.AsType[*ConfigErrors](err); ok {
 			for _, issue := range cErrs.Unwrap() {
 				configErrs.AddErr(issue)
 			}
