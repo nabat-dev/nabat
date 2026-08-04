@@ -1,49 +1,42 @@
 # Design Principles
 
-The values that guide how we build Nabat.
+Why the API looks like this, and which trade-offs we take when we change it.
 
-These principles help two groups of people:
+- Building a CLI with Nabat: these explain the shape of the API.
+- Contributing to Nabat: these tell you which trade-offs to prefer.
 
-- If you build CLIs with Nabat, they explain why the API looks the way it does.
-- If you contribute to Nabat, they tell you which trade-offs to make.
-
-For how the package is structured, see [Architecture](architecture.md). For why we picked
-specific approaches, see [Design Decisions](design-decisions.md).
+See [Architecture](architecture.md) for package layout.
 
 ## Audience and Influences
 
-Nabat is a Go library, but it builds CLIs for humans. So the principles below cover both
-sides: how we treat the developer who writes Go code, and how the resulting CLI treats the
-person at the terminal.
+Nabat is a Go library that builds CLIs for people. The principles cover both sides:
+the developer writing Go, and the person at the terminal.
 
-We did not invent these ideas. Nabat stands on top of forty years of CLI design work:
+We borrowed heavily. Useful background:
 
 - [The Unix Programming Environment](https://en.wikipedia.org/wiki/The_Unix_Programming_Environment) and the original UNIX philosophy.
 - [POSIX utility conventions](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap12.html) and the [GNU Coding Standards](https://www.gnu.org/prep/standards/html_node/Command_002dLine-Interfaces.html) for command-line behavior.
-- [clig.dev](https://clig.dev/), a modern guide that updates the UNIX rules for today's tools.
+- [clig.dev](https://clig.dev/), which updates UNIX rules for modern tools.
 - [12 Factor CLI Apps](https://medium.com/@jdxcode/12-factor-cli-apps-dd3c227a0e46) by Jeff Dickey.
-- The [Charm](https://charm.sh) ecosystem (Lip Gloss, Huh, Glamour) for terminal styling and prompts.
-- GitHub CLI's `pkg/iostreams` package, which inspired the `IOStreams` type in the nabat core.
-
-A good developer experience is the goal. Every principle below is one way to reach it.
+- [Charm](https://charm.sh) (Lip Gloss, Huh, Glamour) for terminal styling and prompts.
+- GitHub CLI's `pkg/iostreams`, which inspired `IOStreams`.
 
 ## 1. Respect the Human at the Terminal
 
-The CLI runs for a person, not for the framework. Output should help them. Errors should
-guide them. Prompts should appear when they help and stay quiet when they do not.
+The CLI is for the person running it. Helpful output, clear errors, prompts only when
+they help.
 
 **What this means:**
 
-A user sees colors and symbols on a real terminal, plain text in a pipe, and a clean log
-in CI. The same code produces all three. The user never sets a flag to fix bad output.
+Same code: color on a TTY, plain text in a pipe, clean logs in CI. No extra flag to
+"fix" output for the environment.
 
 **In practice:**
 
-- `Success`, `Warn`, `Error`, and `Info` carry meaning, not just text. Each one writes to
-  the right stream and uses the theme.
-- Prompts run only when stdin is a real terminal. In CI the framework falls back to env
-  vars, defaults, or a clear error.
-- Themes default to safe colors. You opt up for richer palettes when you want them.
+- `Success`, `Warn`, `Error`, and `Info` pick the stream and the theme for you.
+- Prompts run only when stdin is a real terminal. In CI you get env, defaults, or a
+  clear error.
+- Themes start conservative. Richer palettes are opt-in.
 
 **Example:**
 
@@ -56,25 +49,25 @@ nabat.WithRun(func(c *nabat.Context) error {
 
 On a real terminal you see a green check, the message, and the key-value pairs in the theme
 style. Because `Success` writes to stderr, piping the command to `jq` leaves the data stream
-clean — the "✓ deployed" line still surfaces on the user's terminal but never reaches the
+clean: the "✓ deployed" line still surfaces on the user's terminal but never reaches the
 JSON parser. In CI logs, no escape codes.
 
 ## 2. Be a Good UNIX Citizen
 
-A CLI built with Nabat lives among other tools. Pipes, scripts, and CI runners must work
-the way users expect.
+Your CLI sits next to other tools. Pipes, scripts, and CI should behave the way people
+already expect.
 
 **What this means:**
 
-We follow the UNIX rules for streams, env vars, exit codes, and color. The framework picks
-the right behavior for the context, so the user never has to.
+Follow the usual rules for streams, env vars, exit codes, and color. Nabat picks behavior
+from the environment so the user does not have to.
 
 **In practice:**
 
 - `IO.Out` is for data. `IO.ErrOut` is for messages, warnings, and errors. Pipes work
-  cleanly because warnings never land in the data stream. See [One IOStreams bundle](design-decisions.md#one-iostreams-bundle-for-input-output-and-errors).
+  cleanly because warnings never land in the data stream.
 - The framework honors `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, and `TERM=dumb` with no
-  setup. See [Terminal-aware output by default](design-decisions.md#terminal-aware-output-by-default).
+  setup.
 - Exit codes follow Cobra and POSIX: zero on success, non-zero on failure.
 - Machine-readable output is built in. `Context.JSON`, `Context.YAML`, `Context.TOML`, and
   `Context.Encode` give the user a stable format for scripts.
@@ -103,30 +96,31 @@ things they already know.
 **What this means:**
 
 `--help`, `--version`, env var names, exit codes, and color rules all follow the most common
-form. We break a convention only when it would harm clarity, and we say why in
-[Design Decisions](design-decisions.md).
+form. We break a convention only when keeping it would harm clarity.
 
 **In practice:**
 
 - `--help` and `-h` are on by default. `--version` and `-v` are opt-in but use the same
-  shape. See [Help, version, and completion live in the core](design-decisions.md#help-version-and-completion-live-in-the-core).
+  shape.
 - Env vars use `PREFIX_NAME` form. The prefix comes from the binary name, and you can change
-  it with `WithEnvPrefix`. See [Environment variables](design-decisions.md#environment-variables-withenv-and-withenvalias).
+  it with `WithEnvPrefix`.
 - Sentinel errors and behaviors match the Go standard library: `MustNew` mirrors
   `regexp.MustCompile`, `Context` implements `context.Context`.
 - When we break a rule on purpose, we name the break. The help heading reads
   `Global Flags:` to match Cobra and Docker, even though `gh` and `kubectl` say "inherited".
-  Read why in [Help heading wording](design-decisions.md#help-heading-wording-global-flags-vs-inherited-flags).
 
 ## 4. One Definition, Every Environment
 
 A single command definition runs unchanged on a developer's terminal, in a script, and in
-CI. You never write `if isInteractive` in a handler.
+CI.
+
+> [!NOTE]
+> You never write `if isInteractive` in a handler. The framework picks the source from
+> the cascade `arg -> env -> prompt -> default`.
 
 **What this means:**
 
-Positional args resolve through a cascade: `arg → env → prompt → default`. The first source
-that provides a value wins. The framework picks the right source based on the context.
+Positional args resolve through that cascade. The first source that provides a value wins.
 
 **In practice:**
 
@@ -156,18 +150,17 @@ nabat.WithSelectArg("environment", "", []string{"staging", "production"},
 ```
 
 Flags follow a simpler cascade (`flag → env → default`). They never prompt, because
-prompting for `--verbose` would be strange. See [Args and flags are different](design-decisions.md#args-and-flags-are-different).
+prompting for `--verbose` would be strange.
 
 ## 5. Progressive Disclosure
 
-Easy things stay easy. Advanced things are possible. Adding power must not make the basics
-harder.
+Keep the simple path short. Do not make beginners pay for power they are not using yet.
 
 **Three levels:**
 
-1. **Basic** — Works right away with good defaults.
-2. **Intermediate** — Common changes are short.
-3. **Advanced** — You get full control when you need it.
+1. **Basic**: sensible defaults, little code.
+2. **Intermediate**: common changes stay short.
+3. **Advanced**: full control when you need it.
 
 **Example:**
 
@@ -257,8 +250,8 @@ nabat.WithExtension(manpage.New(
 The lattice keeps each call site coherent. `Option` (the New site) is a
 superset of `RootOption` (everything valid on the root command), which is a
 strict subset of `CommandOption` (everything valid on any command). All five
-families — `Option`, `RootOption`, `CommandOption`, `ArgOption`, and
-`FlagOption` — are Go interfaces, so a single value can satisfy more than
+families (`Option`, `RootOption`, `CommandOption`, `ArgOption`, and
+`FlagOption`) are Go interfaces, so a single value can satisfy more than
 one slot when that combination is meaningful. For example,
 `WithRequired()`, `WithUsage(text)`, `WithEnv(name)`, and `WithEnvAlias(...)`
 each return `interface { ArgOption; FlagOption }` and slot into both
@@ -349,17 +342,17 @@ one extra interface declaration in the return type. The win is that every
 misuse is a build error, never a runtime check, and there is exactly one
 exported name to learn per concept.
 
-For the full option type breakdown, see [Architecture — Option Types](architecture.md#key-types)
-and [One option type per target](design-decisions.md#one-option-type-per-target).
+For the full option type breakdown, see [Architecture: Key Types](architecture.md#key-types).
 
 ## 8. Explicit and Opt-In
 
-Nothing happens unless you ask for it. Help is the one carve-out, because every CLI needs it.
+Features stay off until you enable them. Help is the exception: every CLI needs
+`--help` / `-h`.
 
 **What this means:**
 
-There are no hidden flags, no auto-registered subcommands beyond help, and no surprise state
-changes. When you read the call site, you see the full surface of your CLI.
+No hidden flags, no surprise subcommands beyond help. The `New(...)` call site should show
+what the CLI includes.
 
 **In practice:**
 
@@ -373,8 +366,7 @@ convention that every comparable CLI library follows (Cobra, Click, clap, urfave
 **Version is opt-in but core.** Pass `nabat.WithVersion("1.2.3")` to install a `version`
 subcommand and a `--version`/`-v` flag. Polish via the nested `VersionOption` family.
 Without `WithVersion`, no version surface is installed. Version lives in core because it
-must register a root flag, which extensions cannot do. See
-[Extensions cannot change existing commands](design-decisions.md#extensions-cannot-change-existing-commands).
+must register a root flag, which extensions cannot do.
 
 **Completion is also opt-in but ships in core.** Pass `nabat.WithCompletion(...)` and
 the App grows a `completion` subcommand with bash/zsh/fish/PowerShell generators.
@@ -382,12 +374,11 @@ Polish via the nested `CompletionOption` family. Per-flag and per-positional
 dynamic candidates use `WithCompleter` / `WithPositionalCompleter` and work
 whether or not `WithCompletion` is set. Completion lives in core because Cobra's
 completion machinery is already linked into every binary, the per-field
-completers attach to flag/arg state the core owns, and shell completion is a
-baseline CLI affordance ([clig.dev](https://clig.dev/)). See
-[Help, version, and completion live in the core](design-decisions.md#help-version-and-completion-live-in-the-core).
+completers attach to flag/arg state the core owns, and shell completion is
+baseline CLI behavior ([clig.dev](https://clig.dev/)).
 
-**Other features are opt-in extensions.** `manpage`, `logging`, and any
-third-party extension are installed by `nabat.WithExtension(...)`:
+**Other features are opt-in extensions.** Install `manpage`, `logging`, or a
+third-party extension with `nabat.WithExtension(...)`:
 
 ```go
 app := nabat.MustNew("myctl",
@@ -397,12 +388,10 @@ app := nabat.MustNew("myctl",
 )
 ```
 
-The cost is one extra line per feature. The win is that you always know what your CLI
-contains.
+One more line per feature, and the call site lists what you got.
 
-**Extensions use the same public API.** First-party and third-party extensions are
-interchangeable. Both implement the `Extension` interface and install themselves through
-`nabat.WithExtension(...)` using the same public accessors. There is no privileged path.
+**Extensions use the same public API.** First-party and third-party both implement
+`Extension` and install through `nabat.WithExtension(...)`. No private path.
 
 ## 9. Errors Are Values, Surfaced Clearly
 
@@ -415,8 +404,8 @@ catches them at the right moment and shows them usefully.
   and where.
 - **Registration errors** are inline (`App.Command` and `Command.Command` return
   `(*Command, error)`) or explicit (`App.MustCommand` and `Command.MustCommand` panic).
-  When you want a single aggregated report — multiple bad commands surfaced together with
-  option and validation errors — declare commands with `nabat.WithCommand(...)` inside
+  When you want a single aggregated report (multiple bad commands surfaced together with
+  option and validation errors), declare commands with `nabat.WithCommand(...)` inside
   `nabat.New(...)`; everything aggregates into the `*ConfigErrors` returned by `New`.
   There is no deferred error path.
 - **Runtime errors** flow through `IO.ErrOut` with the theme. Errors are never silent.
@@ -476,12 +465,12 @@ Old code keeps working.
 **In practice:**
 
 - **Functional options grow safely.** A new option is a new exported function. No struct
-  field, no positional change, no breaking call site. See [Functional options with private config](design-decisions.md#functional-options-with-private-config).
+  field, no positional change, no breaking call site.
 - **`internal/` shields users from refactors.** Implementation code lives under `internal/`,
-  so we can move it around without breaking imports. See [Flat public package with `internal/` helpers](design-decisions.md#flat-public-package-with-internal-helpers).
+  so we can move it around without breaking imports.
 - **Deprecation is visible, not hidden.** `WithDeprecated` and
   `WithDeprecatedShorthand` keep commands and flags in help with a clear
-  `(deprecated: …)` note, rather than removing them. See [Cobra is the engine](design-decisions.md#cobra-is-the-engine).
+  `(deprecated: ...)` note, rather than removing them.
 - **Extensions use the same public API as built-ins.** When we add a feature, we add it
   through the surface that third-party authors also use. There is no inside track.
 
@@ -491,35 +480,30 @@ without rewriting your CLI.
 
 ## 11. Escape Hatches, Not Walls
 
-A framework that hides everything traps you. A framework with escape hatches gives you the
-common path and a way out when you need it.
+Prefer the usual path. When you need raw access, take a named hatch instead of fighting
+the framework.
 
 **What this means:**
 
-When you need raw access, you can have it. The escape hatches are clearly named so you know
-when you are stepping outside the safe path.
+Hatches are explicit (`Unsafe*`, `WithIO`, ...) so you can see when you leave the
+supported path.
 
 **In practice:**
 
-- **`App.UnsafeRoot()`** returns the underlying `*cobra.Command`. Use it when you need a
-  Cobra feature Nabat does not wrap directly.
-- **`Command.UnsafeCobra()`** is the same escape hatch on a subcommand: returns the
-  underlying `*cobra.Command` for cases Nabat does not abstract (C-only Cobra hooks,
-  dynamic registration). Mutating the command tree after construction may bypass Nabat
-  invariants — prefer the `CommandOption` family for standard use.
-- **`WithIO`** lets you bring your own input, output, and error streams. Tests use this.
-  Custom hosts use this.
-- **`WithLogger`** lets you bring your own `*slog.Logger`. The `logging` extension is one
-  preset; bring your own when you want full control.
-- **`WithErrorHandler`** lets you replace the default styled error printer.
+- **`App.UnsafeRoot()`** returns the root `*cobra.Command` for Cobra features Nabat
+  does not wrap.
+- **`Command.UnsafeCobra()`** does the same for a subcommand (Cobra-only hooks, dynamic
+  registration). Mutating the tree after construction can skip Nabat checks; prefer
+  `CommandOption` for normal work.
+- **`WithIO`** for custom streams (tests and hosts).
+- **`WithLogger`** for your own `*slog.Logger`. The `logging` extension is one preset.
+- **`WithErrorHandler`** replaces the default styled error printer.
 
-The `Unsafe` prefix is a Go convention (see `unsafe.Pointer`) that marks the sharp edges.
-Use them with intent. Stay on the safe path when you can.
+`Unsafe` follows Go's usual sharp-edge naming (`unsafe.Pointer`). Use it on purpose.
 
 ## 12. Testability
 
-If something is hard to test, the design is wrong. Every API choice should
-make tests easier, not harder.
+Hard-to-test APIs are a design smell. Prefer seams that make tests cheap.
 
 **What this means:**
 
@@ -573,13 +557,8 @@ require.Contains(t, errOut.String(), "deployed", "Success messages land on stder
 | 11. Escape hatches, not walls          | `UnsafeRoot`, `Command.UnsafeCobra`, `WithIO`, `WithLogger`, `WithErrorHandler` for full control |
 | 12. Testability                        | `nabattest.NewIO()`, `nabattest.Run`, buffer IO is non-TTY, `Context` is a Go context             |
 
-These principles guide all development work. When you contribute to Nabat,
-make sure your changes follow them. When you build a CLI on Nabat, expect
-them to hold across releases.
+When you change Nabat, keep these. When you build on Nabat, you can count on them
+across releases.
 
-For the package structure, see [Architecture](architecture.md). For the
-reasoning behind specific choices, see [Design Decisions](design-decisions.md).
-For the implementation patterns (functional options, private configs, option
-type signatures), see [Architecture — Key Types](architecture.md#key-types)
-and
-[Design Decisions — Functional options with private config](design-decisions.md#functional-options-with-private-config).
+More detail: [Architecture](architecture.md) and
+[Architecture: Key Types](architecture.md#key-types).

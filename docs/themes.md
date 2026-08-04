@@ -1,9 +1,7 @@
 # Themes
 
-How Nabat's theme system fits together: the merged leaf+catalog
-package, the data-driven `Theme` value, the multi-variant manifest
-format, and the per-render-target style blocks (chroma, glamour,
-prompt).
+The theme package, JSON manifests, tokens, and how chroma / glamour / prompt
+styles attach.
 
 ## Contents
 
@@ -25,8 +23,7 @@ prompt).
 
 ## System Overview
 
-Nabat ships theming through a single package with a strict
-no-imports-from-the-root-package invariant:
+Theming lives in one package. That package does not import `nabat.dev`:
 
 ```text
 nabat ──► nabat/theme  (leaf + catalog)
@@ -38,18 +35,14 @@ nabat ──► nabat/theme  (leaf + catalog)
 | `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Recipe` interface; embedded DTCG JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
 | `nabat.dev`    | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Recipe)` accepts any `Recipe` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities`, calls `Theme.Resolve(caps)`, and pins the resulting `theme.ResolvedTheme` for the lifetime of the app. `App.Theme()` returns it. |
 
-`theme.Theme` is **declarative data**, not a function. The struct
-carries one or more `Palette` entries (one per declared variant), the
-default variant pick when capabilities don't pin one, and a few
-cross-variant defaults. Resolution picks a variant, applies framework
-defaults to any nil/empty cascade slot, and returns an immutable
-`ResolvedTheme`.
+`theme.Theme` is data, not a function. It holds one `Palette` per variant, a
+default variant when capabilities do not pin one, and a few cross-variant
+defaults. Resolve picks a variant, fills empty cascade slots, and returns an
+immutable `ResolvedTheme`.
 
-The recipe runs **once per `App`**, on construction. After
-`nabat.New(...)` returns, the `ResolvedTheme` is immutable and
-thread-safe; every output path (`Success`, `Warn`, `Table`, `List`,
-`renderHelp`, `Markdown`, the logging extension) reads through
-`App.Theme()`.
+That resolve runs once at `nabat.New(...)`. After that, `App.Theme()` is
+fixed; `Success`, `Warn`, `Table`, help, Markdown, and the logging extension
+all read it.
 
 ## Selecting a Theme
 
@@ -75,8 +68,8 @@ if name == "" {
 app, _ := nabat.New("myctl", nabat.WithTheme(name))
 ```
 
-Unknown names produce a `*ConfigErrors` from `nabat.New` listing every
-registered name, so the user immediately sees what they meant to type.
+Unknown names return a `*ConfigErrors` from `nabat.New` that lists every
+registered name.
 
 The catalog shipped with Nabat:
 
@@ -91,10 +84,9 @@ The catalog shipped with Nabat:
 
 ## Programmatic Themes
 
-When the styling you want cannot be expressed as a JSON manifest —
-for example a `huh.Theme` closure or a `chroma.Style` you want to
-own in Go — build a `theme.Theme` struct and install it with
-`nabat.WithCustomTheme`:
+When the styling you want cannot be expressed as a JSON manifest (for
+example a `huh.Theme` closure or a `chroma.Style` you want to own in Go),
+build a `theme.Theme` struct and install it with `nabat.WithCustomTheme`:
 
 ```go
 import (
@@ -177,10 +169,11 @@ multi-variant manifest stays multi-variant after the override; the
 same one-line tweak affects whichever variant the runtime
 capabilities pick.
 
-Overrides are silently ignored when the active theme is a bespoke
-`theme.Recipe` (anything other than a `theme.Theme` value); the
-recipe's `Resolve` method is opaque, so the framework cannot
-meaningfully apply per-`Palette` overrides into it.
+> [!WARNING]
+> Overrides are silently ignored when the active theme is a bespoke
+> `theme.Recipe` (anything other than a `theme.Theme` value). The recipe's
+> `Resolve` method is opaque, so the framework cannot apply per-`Palette`
+> overrides into it.
 
 ## Manifest Format
 
@@ -189,12 +182,12 @@ Manifests follow the
 [Design Tokens Community Group (DTCG)](https://design-tokens.github.io/community-group/format/)
 three-tier model, organized per **variant**:
 
-1. **Variants** — top-level map keyed by mode (`dark` / `light` /
+1. **Variants**: top-level map keyed by mode (`dark` / `light` /
    `notty`). Each entry is a self-contained palette.
-2. **Primitives** — per-variant named raw colors (hex literals).
-3. **Tokens** — per-variant named semantic styles that reference
+2. **Primitives**: per-variant named raw colors (hex literals).
+3. **Tokens**: per-variant named semantic styles that reference
    primitives or other tokens.
-4. **Component-level styles** — per-variant optional fields that
+4. **Component-level styles**: per-variant optional fields that
    point at the chroma, glamour, and prompt integrations either by
    upstream name or inline definition.
 
@@ -275,7 +268,7 @@ Unknown attributes are rejected at parse time (the JSON Schema sets
 ## Token Catalog
 
 `nabat.dev/theme` defines the well-known tokens used by core consumers.
-Token names are an open set — third-party themes and extensions may add
+Token names are an open set: third-party themes and extensions may add
 their own and read them back via `ResolvedTheme.Style(token)`. A theme
 that omits a token falls through the **alias chain** before hitting
 the zero `lipgloss.Style` (terminal default).
@@ -353,7 +346,7 @@ manifest validator both enforce that.
 When neither form is present, the framework picks a default that
 matches the variant key and the resolved [Capabilities](#capabilities):
 
-| Integration | When omitted, the framework substitutes…                                                                                                                                              |
+| Integration | When omitted, the framework substitutes...                                                                                                                                              |
 |-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `chroma`    | `monokai` for `dark`, `github` for `light`, none for `notty`. `Context.Code` then falls back to chroma's own default if the name does not resolve.                                     |
 | `glamour`   | `notty` when the variant is `notty` or the primary stream is non-interactive; `dark` when `Capabilities.Dark` is true; `light` otherwise. `Context.Markdown` falls back to raw text on glamour init failure. |
@@ -363,20 +356,18 @@ matches the variant key and the resolved [Capabilities](#capabilities):
 the manifest, outside the `variants` map; in that case every variant
 inherits the shared adapter / inline block unless it declares its own.
 
-This is what lets `theme.Default` work on every terminal without
-hard-coding a separate manifest per environment.
+That is how `theme.Default` works across terminals without a separate
+manifest per environment.
 
 ## Custom Style Authoring Paths
 
-There are two ways to ship a custom chroma / glamour / prompt
-configuration with a theme: reference an upstream name, or define the
-style inline against this variant's primitives.
+Two ways to ship custom chroma / glamour / prompt styling: name an upstream
+style, or define it inline against this variant's primitives.
 
 ### 1. Reference an Upstream Name
 
-Use the named field if the styling already exists in the upstream
-library catalog. This is the path for "I want the Catppuccin look,
-change nothing" cases.
+Use the named field when the look already exists upstream (for example
+"use Catppuccin as-is").
 
 ```jsonc
 // theme/data/dracula.json (excerpt)
@@ -393,27 +384,26 @@ change nothing" cases.
 
 The framework wires upstream chroma / glamour through their own
 catalogs. The `prompt` field is a **closed catalog** of four bundled
-upstream wrappers — `charm`, `base16`, `dracula`, `catppuccin` — defined
+upstream wrappers (`charm`, `base16`, `dracula`, `catppuccin`), defined
 in [`theme/internal/manifest/huh_adapters.go`](../theme/internal/manifest/huh_adapters.go).
 Anything not in that list is rejected at registry init with the four
 valid names listed in the error.
 
-Unknown chroma / glamour names are tolerated — those libraries fall
-back to their own defaults rather than failing — so a theme targeting a
-future upstream addition will simply look plain until that release
-ships.
+Unknown chroma / glamour names do not fail the build. Those libraries fall
+back to their own defaults, so a theme aimed at a future upstream style
+looks plain until that release ships.
 
 ### 2. Define the Style Inline
 
 For everything else, embed the definition in the manifest. The three
-inline forms — `chromaStyle`, `glamourStyle`, `promptStyle` — speak
+inline forms (`chromaStyle`, `glamourStyle`, `promptStyle`) speak
 the same style-spec dialect as the `tokens` map and may reference
 primitives and tokens with `$primitive` / `$token`. They are
 mutually exclusive with their named counterparts.
 
 The brand-aligned `nabat` theme uses the inline path for *both* its
 chroma palette and its prompt block, so the manifest is the only
-place where its styling lives — there is no accompanying Go file:
+place where its styling lives (there is no accompanying Go file):
 
 ```jsonc
 {
@@ -439,7 +429,7 @@ place where its styling lives — there is no accompanying Go file:
 
 #### Inline `chromaStyle`
 
-Keys are snake_case chroma token names — `name_function`,
+Keys are snake_case chroma token names: `name_function`,
 `literal_string`, `generic_deleted`, `background`, `keyword`, etc.
 The parser converts the snake_case key to chroma's PascalCase
 identifier and calls `chroma.TokenTypeString`; unknown keys are
@@ -482,7 +472,7 @@ Each field is a `styleSpec`; color slots accept hex literals or
 
 #### Inline `promptStyle`
 
-A **flat** Nabat-native block — one entry per prompt slot. The
+A **flat** Nabat-native block: one entry per prompt slot. The
 framework owns the projection onto huh's struct shape, so manifest
 authors never see fields like `focused.textInput.cursor` or have to
 deal with `$inherit` between focused and blurred.
@@ -534,36 +524,30 @@ Drift between the two is impossible to commit by accident:
 
 ## Schema Hosting
 
-The public URL `https://nabat.dev/schemas/theme/v1.json` is a contract
-with every theme author who has ever copied an `$schema` field out of a
-Nabat manifest. The hosting requirement is therefore: **the bytes
-served at that URL must match the bytes at `theme/schema/v1.json` in
-the latest tagged release.**
+> [!IMPORTANT]
+> The public URL `https://nabat.dev/schemas/theme/v1.json` is a contract
+> with every theme author who has copied an `$schema` field out of a
+> Nabat manifest. The bytes served at that URL must match
+> `theme/schema/v1.json` in the latest tagged release.
 
-Two viable mechanisms (the choice is an infra-config decision, not a
-code decision):
+Hosting is infra config, not library code. Two options that work:
 
-- **Cloudflare Worker / GitHub Pages redirect** to the GitHub raw URL
-  of `theme/schema/v1.json` on the latest tag. No separate publish
-  step.
-- **Static mirror** that copies the file into the `nabat.dev` site on
-  every release. Caches well at the CDN edge.
+- Redirect (Cloudflare Worker or GitHub Pages) to the GitHub raw URL of
+  `theme/schema/v1.json` on the latest tag.
+- Copy the file into the `nabat.dev` site on each release.
 
-Either way, the in-repo file is canonical. If the public mirror is
-ever unreachable, JSON Schema validators that have already cached the
-document keep working (the `$id` field inside the document is the
-canonical identifier per the JSON Schema spec).
+The in-repo file is canonical. If the public URL is down, validators that
+already cached the document still work (`$id` inside the document is the
+identifier per the JSON Schema spec).
 
 ## Schema Versioning
 
-Pre-1.0 the schema is **rewritten in place** as the framework
-matures. The current `v1.json` is the only version; manifest authors
-migrate alongside the framework. There is no compat shim.
+> [!WARNING]
+> Pre-1.0 the schema is **rewritten in place**. `v1.json` is the only
+> version; update manifests with the framework. No compat shim.
 
-After 1.0 the URL versioning scheme (`v1.json`, `v2.json`, ...) will
-take effect; the in-repo file at the lowest-numbered version stays
-canonical for that version, and breaking changes ship as a new
-numbered file. Until then, breaking changes happen.
+After 1.0 we will version URLs (`v1.json`, `v2.json`, ...). Breaking changes
+then ship as a new file. Until then, breaking changes land in place.
 
 ## Adding a Theme
 
@@ -571,12 +555,12 @@ Adding a built-in theme is a JSON-only edit. There is no accompanying
 Go file, no registry call, no `init()` hook to wire.
 
 1. Drop a JSON file at `theme/data/<name>.json` matching the schema.
-   The filename (without `.json`) becomes the registry key — it must
+   The filename (without `.json`) becomes the registry key. It must
    equal the manifest's `name` field and match the
    `^[a-z0-9][a-z0-9-]*$` pattern.
 2. (Optional) Add a string constant in `theme/names.go` so callers
    get IDE autocomplete and the drift test enforces that the constant
-   has a matching manifest. Anonymous string names work too —
+   has a matching manifest. Anonymous string names work too:
    `nabat.WithTheme("my-internal-theme")` is valid as long as a
    manifest exists.
 3. Run `go test ./theme/...`. The drift test confirms every constant
@@ -585,17 +569,17 @@ Go file, no registry call, no `init()` hook to wire.
    the theme produces a usable `theme.ResolvedTheme` across every
    `Capabilities` permutation.
 
-If the styling you want cannot be expressed as a manifest — for example
-a `huh.Theme` closure that varies on `Capabilities` — implement the
+If the styling you want cannot be expressed as a manifest (for example
+a `huh.Theme` closure that varies on `Capabilities`), implement the
 `theme.Recipe` interface from your application and pass it to
-`nabat.WithCustomTheme(...)` instead; that path keeps a programmatic
+`nabat.WithCustomTheme(...)` instead. That path keeps a programmatic
 recipe out of the built-in catalog without requiring a registration
 API.
 
 The schema can be exercised against hand-written manifests using
 `theme.Schema()` and the
 [`github.com/santhosh-tekuri/jsonschema/v6`](https://pkg.go.dev/github.com/santhosh-tekuri/jsonschema/v6)
-compiler — see `theme/catalog_test.go` for the canonical pattern.
+compiler. See `theme/catalog_test.go` for the canonical pattern.
 
 ## Capabilities
 
@@ -630,8 +614,8 @@ without standing up an IO bundle.
 Extensions and core consumers can declare which tokens they read via
 the `theme.Requirement` machinery. The framework cross-checks the
 declared set against the resolved theme at `App.finalize` time and
-surfaces missing tokens as a diagnostic — warn-by-default
-(stderr line) or hard error via `nabat.WithStrictThemeRequirements()`.
+surfaces missing tokens as a diagnostic (warn-by-default on stderr, or
+a hard error via `nabat.WithStrictThemeRequirements()`).
 
 Extensions opt in by implementing the optional sub-interface:
 

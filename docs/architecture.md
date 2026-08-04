@@ -1,11 +1,8 @@
 # Architecture
 
-How Nabat is structured — the package layout, type responsibilities, and the
-layers that connect them.
+Package layout, the main types, and how the layers fit together.
 
-For the principles that drive these decisions, see
-[Design Principles](design-principles.md). For the reasoning behind specific
-choices, see [Design Decisions](design-decisions.md).
+See also [Design Principles](design-principles.md).
 
 ## Contents
 
@@ -23,59 +20,46 @@ choices, see [Design Decisions](design-decisions.md).
 
 ## Core + Extension Subpackages
 
-Nabat is split between a small **agnostic core** (the `nabat` package) and a set
-of **opt-in extension subpackages** that build on the core's public extension
-API.
+Nabat has a small core (`nabat`) and opt-in extension subpackages that use the
+core's public extension API.
 
 | Package                     | Role                                                                                |
 |-----------------------------|-------------------------------------------------------------------------------------|
 | `nabat.dev`                 | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Recipe` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
 | `nabat.dev/nabat/nabattest` | Test helpers nested under core (analogous to `net/http/httptest`): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`. Not imported by production code. |
-| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Recipe`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded DTCG JSON manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, …), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
+| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Recipe`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded DTCG JSON manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, ...), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
 | `nabat.dev/manpage`         | `man` subcommand (roff/man-page generation)                                         |
 | `nabat.dev/logging`         | Styled `*slog.Logger` install with --verbose / --log-level flag wiring; derives its level / key=value styles from `theme.ResolvedTheme` via `logging.FromTheme`. |
 
-The core is **agnostic about extensions**: it knows only the `Extension`
-interface (`fmt.Stringer` + `Init(AppSurface) error`) and the `AppSurface` API
-(`UnsafeRoot()`, `OnPreRun()`, `Theme()`, `SetLogger()`, `IO()` (the
-`IOStreams` bundle), `Name()`, `EnvPrefix()`, `Command()`,
-`MustCommand()`). The concrete `*App` type implements `AppSurface`, so the same
-methods are available on the value users hold. Extensions call those methods to
-install their behaviour. Third-party extensions use the same surface as
-first-party extensions. On the `Command` side, `Command.UnsafeCobra()` is the
-matching escape hatch for reaching the underlying `*cobra.Command` of any
-subcommand.
+The core does not import extensions. It only knows the `Extension` interface
+(`fmt.Stringer` + `Init(AppSurface) error`) and the `AppSurface` API
+(`UnsafeRoot()`, `OnPreRun()`, `Theme()`, `SetLogger()`, `IO()`, `Name()`,
+`EnvPrefix()`, `Command()`, `MustCommand()`). `*App` implements `AppSurface`,
+so users and extensions call the same methods. Third-party extensions use that
+surface too. For a subcommand's underlying `*cobra.Command`, use
+`Command.UnsafeCobra()`.
 
-Extensions are installed via the `WithExtension(ext)` Option passed to
-`New(...)`; their `Init` runs inside `New` after the root command and core
-features (help, version, completion) are wired up. Errors from an extension's
-`Init` surface directly from `New(...)`.
+Install an extension with `WithExtension(ext)` on `New(...)`. `Init` runs
+inside `New` after help, version, and completion are wired. Errors from `Init`
+come back from `New(...)`.
 
-This means:
+Consequences:
 
-- `nabat` itself imports zero extension packages — adding an extension does not
-  pull in new code unless you import it.
-- Each extension subpackage owns its `Option` type, its
-  `New(opts...) nabat.Extension` constructor, and its install logic.
-- Beginners pay no discovery cost — every extension call is
-  `nabat.WithExtension(<package>.New(...))`, an English sentence.
+- Importing an extension is the only way its code enters your binary.
+- Each extension owns its options, `New(opts...) nabat.Extension`, and install
+  logic.
+- The call site always looks like
+  `nabat.WithExtension(<package>.New(...))`.
 
-Theme, help, version, and completion are the deliberate exceptions: theme stays
-wired into core because every output path consults the `App.Theme()` accessor
-(help, structured output, extension loggers all read from it). The theme
-primitives, the built-in catalog, and the manifest parser all live in the
-single `nabat.dev/theme` package (with the parser in
-`theme/internal/manifest`). `App.New` is the place where a recipe is resolved
-against detected `Capabilities` and pinned for the lifetime of the App. Help
-and version stay in core because they need to install root-level flags (`--help`,
-`--version`) — the only sanctioned way to do so. Completion stays in core
-because the cobra completion machinery is already linked into every binary,
-the dynamic-completer hooks (`WithCompleter`,
-`WithPositionalCompleter`) live on flags and args that the core already owns,
-and shell completion is a baseline CLI affordance (per [clig.dev](https://clig.dev/))
-— making it an extension would force every CLI to wire the same boilerplate. See
-[Help, version, and completion live in the core](design-decisions.md#help-version-and-completion-live-in-the-core)
-for the full rationale.
+Theme, help, version, and completion stay in core on purpose. Theme is on
+every output path through `App.Theme()`; the catalog and parser live in
+`nabat.dev/theme` (parser under `theme/internal/manifest`). `App.New` resolves
+the recipe against detected `Capabilities` and pins it for the App lifetime.
+Help and version need root flags (`--help`, `--version`), which extensions
+cannot add. Completion stays in core because Cobra's completion code is already
+linked, the completer hooks hang off flags and args the core owns, and shell
+completion is baseline CLI behavior ([clig.dev](https://clig.dev/)). Shipping
+it as an extension would make every app re-wire the same setup.
 
 ## Layer Diagram
 
@@ -120,10 +104,8 @@ it.
 
 ## Extension Boundary
 
-The architectural invariant that makes the extension system safe: extensions
-reach core only through the public extension-facing surface on `App`. They never
-touch core internals (the `meta` map, the root command's internals, the private
-`config`).
+Extensions talk to core only through the public `App` surface. They do not touch
+internals (`meta`, root command guts, private `config`).
 
 ```mermaid
 flowchart LR
@@ -153,19 +135,19 @@ flowchart LR
 ```
 
 Extensions install subcommands (via `App.Command`), register global hooks (via
-`App.OnPreRun`), and may set the logger (via `App.SetLogger`). They MUST NOT
-modify the root command or any command they did not create. Cross-cutting
-concerns that need root flags belong in core (this is why help and version live
-there). See
-[Extensions cannot change existing commands](design-decisions.md#extensions-cannot-change-existing-commands)
-for the rationale.
+`App.OnPreRun`), and may set the logger (via `App.SetLogger`).
+
+> [!IMPORTANT]
+> Extensions MUST NOT modify the root command or any command they did not
+> create. Cross-cutting concerns that need root flags belong in core (this is
+> why help and version live there).
 
 ## Key Types
 
 | Type           | What it does                                                                                                                                            |
 |----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `App`          | Root CLI application. Holds the Cobra root command, the `*commandSpec` map, and config. Entry point for `Command`, `MustCommand`, `Run`. |
-| `Extension`    | `interface { fmt.Stringer; Init(AppSurface) error }` — the single extension point. Extensions are installed via the `WithExtension(ext)` Option passed to `New(...)` and run in declaration order inside `New`. `String()` identifies the extension in error messages. |
+| `Extension`    | `interface { fmt.Stringer; Init(AppSurface) error }`: the single extension point. Extensions are installed via the `WithExtension(ext)` Option passed to `New(...)` and run in declaration order inside `New`. `String()` identifies the extension in error messages. |
 | `Command`      | One subcommand. Wraps a Cobra command with Nabat metadata (positional args, flags, run function). Supports nesting via `Command()` (returns `(*Command, error)`) or `MustCommand()` (panics on failure). |
 | `Context`      | Per-invocation runtime passed to `RunFunc`. Holds Go context, resolved values, raw args, interactive state, the shared sticky-error writer, and every output/prompt method. `Logger()` reads from the App's installed logger or returns a discard logger. |
 | `config`       | Private app config. Holds name, env prefix, theme, IO writers, the optional installed logger, the root command's `commandSpec` (`rootSpec`), pending declarative subcommand registrations (`pendingCommands`), and the optional error handler. Validated at construction. |
@@ -182,15 +164,15 @@ for the rationale.
 | `theme.Requirement`  | Token set declared by a consumer (core or extension via `ExtensionWithRequirements`). The framework cross-checks against the resolved theme at `App.finalize` and surfaces missing tokens (warn-by-default; hard error via `nabat.WithStrictThemeRequirements`). |
 | `ConfigErrors` | Aggregated validation errors from config validation and declarative registration via `WithCommand`. Collects multiple issues into one error value, returned from `New`. |
 
-**Bundled theme manifests (`theme/data/*.json`).** Brand colors for the built-in `nabat` theme track the canonical palette package (`palette/palette/nabat-dark.json` and `nabat-light.json`): each manifest primitive hex matches the palette `colors` entry with the same name. The manifest-only **`link` primitive** resolves through palette **`roles.link`** (same hex as the named garden swatch). **`text.link`** always references that dedicated primitive—not `status.info`—so hyperlink color is explicit in diffs. Every colored variant shares the same **`tokens` key set** as `theme/data/default.json` for its variant kind (`dark`, `light`, or `notty`); `TestBundledManifestTokenKeysMatchDefault` in `theme/manifest_token_keys_test.go` enforces key parity. Cross-repo verification runs when **`NABAT_PALETTE_ROOT`** points at a palette repository root (`TestNabatManifestHexMatchesPalette` in `theme/nabat_palette_parity_test.go`).
+**Bundled theme manifests (`theme/data/*.json`).** Brand colors for the built-in `nabat` theme track the canonical palette package (`palette/palette/nabat-dark.json` and `nabat-light.json`): each manifest primitive hex matches the palette `colors` entry with the same name. The manifest-only **`link` primitive** resolves through palette **`roles.link`** (same hex as the named garden swatch). **`text.link`** always references that dedicated primitive, not `status.info`, so hyperlink color is explicit in diffs. Every colored variant shares the same **`tokens` key set** as `theme/data/default.json` for its variant kind (`dark`, `light`, or `notty`); `TestBundledManifestTokenKeysMatchDefault` in `theme/manifest_token_keys_test.go` enforces key parity. Cross-repo verification runs when **`NABAT_PALETTE_ROOT`** points at a palette repository root (`TestNabatManifestHexMatchesPalette` in `theme/nabat_palette_parity_test.go`).
 
-All five option families — `Option`, `RootOption`, `CommandOption`,
-`ArgOption`, and `FlagOption` — are Go interfaces, so one value can satisfy
+All five option families (`Option`, `RootOption`, `CommandOption`,
+`ArgOption`, and `FlagOption`) are Go interfaces, so one value can satisfy
 more than one slot when the combination is meaningful. Examples: `WithRequired()`,
 `WithUsage(text)`, `WithEnv(name)`, and `WithEnvAlias(...)` each return
 `interface { ArgOption; FlagOption }`. `WithHidden()` returns
 `interface { CommandOption; FlagOption }`. `WithDeprecated(message, ...)`
-returns the same union for commands and flags (positional args excluded —
+returns the same union for commands and flags (positional args excluded:
 cobra has no deprecation hook for them). Misuse on any other slot is a
 compile-time error. The command-related types form a lattice:
 
@@ -208,10 +190,8 @@ compile-time error. The command-related types form a lattice:
 
 A `nabat.WithCommand(name, opts...)` value satisfies all three interfaces, so
 the same call works as a top-level entry to `New(...)` or as a nested entry
-inside another `WithCommand`. See
-[One option type per target](design-decisions.md#one-option-type-per-target),
-[`Option` is an interface, not a function type](design-decisions.md#option-is-an-interface-not-a-function-type),
-and godoc on each constructor for the full surface.
+inside another `WithCommand`. See godoc on each constructor for the full
+surface.
 
 ## Type Relationships
 
@@ -219,15 +199,15 @@ and godoc on each constructor for the full surface.
 App
 ├── config (private, set via Option)
 │   ├── name, envPrefix
-│   ├── theme (theme.Recipe — the recipe set by WithTheme / WithCustomTheme; concrete is usually theme.Theme)
-│   ├── themeOverrides ([]theme.Override — registered via WithThemeOverride / WithThemeOverrides)
-│   ├── strictThemeRequirements (bool — promote requirement diagnostics to hard errors)
-│   ├── resolvedTheme (theme.ResolvedTheme — populated once by config.finalize)
+│   ├── theme (theme.Recipe: the recipe set by WithTheme / WithCustomTheme; concrete is usually theme.Theme)
+│   ├── themeOverrides ([]theme.Override: registered via WithThemeOverride / WithThemeOverrides)
+│   ├── strictThemeRequirements (bool: promote requirement diagnostics to hard errors)
+│   ├── resolvedTheme (theme.ResolvedTheme: populated once by config.finalize)
 │   ├── logger (*slog.Logger; nil = discard)
-│   ├── rootSpec (*commandSpec — the root command's spec, populated by RootOption values passed to New)
-│   ├── pendingCommands ([]*commandReg — declarative subcommands from WithCommand at the New level)
+│   ├── rootSpec (*commandSpec: the root command's spec, populated by RootOption values passed to New)
+│   ├── pendingCommands ([]*commandReg: declarative subcommands from WithCommand at the New level)
 │   ├── errorHandler (func(error); nil = default styled stderr)
-│   └── io (*IOStreams — defaults to NewSystemIO())
+│   └── io (*IOStreams: defaults to NewSystemIO())
 ├── root (*cobra.Command)
 ├── meta (map[*cobra.Command]*commandSpec)
 │   └── commandSpec
@@ -242,31 +222,31 @@ App
 │       ├── passthrough (*passthroughDef)
 │       ├── preRun / validations / postRun (lifecycle hooks)
 │       ├── parseOpts, arityOpts
-│       ├── children ([]*commandReg — declarative nested commands from WithCommand inside this command's options)
+│       ├── children ([]*commandReg: declarative nested commands from WithCommand inside this command's options)
 │       └── run (RunFunc)
-├── globalPreRun ([]func(*Context) error — registered via App.OnPreRun; fire before every command)
-└── IO (*IOStreams — same instance as cfg.io; public field for plugins)
+├── globalPreRun ([]func(*Context) error: registered via App.OnPreRun; fire before every command)
+└── IO (*IOStreams: same instance as cfg.io; public field for plugins)
 
 Extension = interface { fmt.Stringer; Init(AppSurface) error }
   (installed via WithExtension(ext); Init runs inside New; may call AppSurface.Command, OnPreRun, SetLogger.
    MUST NOT modify the root command or commands it did not create.)
 
 Context (created per invocation)
-├── ctx (context.Context — Go context from Run or testing.Run)
+├── ctx (context.Context: Go context from Run or testing.Run)
 ├── app (*App)
 ├── cmd (*cobra.Command)
-├── IO (*IOStreams — same instance as App.IO)
-├── logger (*slog.Logger — copied from App.cfg.logger, or nil → discard)
-├── args ([]string — raw positional args)
-├── passthroughArgs ([]string — args after "--"; nil when "--" absent)
-├── values (map[string]any — resolved args + flags)
-├── set (map[string]bool — true when value came from arg/env/prompt, not a default)
-└── interactive (bool — IO.CanPrompt() at construction time)
+├── IO (*IOStreams: same instance as App.IO)
+├── logger (*slog.Logger: copied from App.cfg.logger, or nil → discard)
+├── args ([]string: raw positional args)
+├── passthroughArgs ([]string: args after "--"; nil when "--" absent)
+├── values (map[string]any: resolved args + flags)
+├── set (map[string]bool: true when value came from arg/env/prompt, not a default)
+└── interactive (bool: IO.CanPrompt() at construction time)
 
 IOStreams
-├── In (io.Reader — raw input)
-├── Out (io.Writer — colorprofile-wrapped stdout, preserves Fd())
-├── ErrOut (io.Writer — colorprofile-wrapped stderr, preserves Fd())
+├── In (io.Reader: raw input)
+├── Out (io.Writer: colorprofile-wrapped stdout, preserves Fd())
+├── ErrOut (io.Writer: colorprofile-wrapped stderr, preserves Fd())
 ├── Methods: IsStdinTTY/IsStdoutTTY/IsStderrTTY, SetXxxTTY (overrides for tests),
 │            ColorEnabled, CanPrompt, TerminalWidth, Err (sticky), RawIn/RawOut/RawErrOut
 └── Constructors: NewSystemIO() (os.Stdin/Stdout/Stderr), NewIO(in,out,err); nabattest.NewIO() returning bundle + 3 buffers
@@ -337,28 +317,27 @@ For each arg defined on the command, Nabat tries sources in order:
          │ no
 4. Required check  →  `WithRequired()` set?            →  return error
          │ no
-5. Constructor default →  `WithArg` / `WithSelectArg` / … `defaultVal` was given?  →  use default
+5. Constructor default →  `WithArg` / `WithSelectArg` / ... `defaultVal` was given?  →  use default
          │ no
 6. Skip            →  value stays absent from context
 ```
 
 The constructor `defaultVal` is the only non-interactive fallback for
-declarative args; see
-[Design Decisions](design-decisions.md#defaultval-is-the-only-non-interactive-fallback-for-declarative-args).
+declarative args.
 
 Environment resolution is **opt-in** per field and split into two explicit
 options:
 
-- `WithEnv(name...)` — names get the configured `envPrefix` prepended after
+- `WithEnv(name...)`: names get the configured `envPrefix` prepended after
   normalization (`some-key` → `MYAPP_SOME_KEY`).
-- `WithEnvAlias(name...)` — verbatim names with no prefix, for legacy/external
+- `WithEnvAlias(name...)`: verbatim names with no prefix, for legacy/external
   variables (e.g. `GITHUB_TOKEN`).
 
 Position of the constructors does not matter. Resolution tries every `WithEnv`
 entry first (in declaration order), then every `WithEnvAlias` entry; the first
 non-empty value wins. The app's `envPrefix` defaults from the binary name and
 can be set with `WithEnvPrefix`. `WithEnv` and `WithEnvAlias` are shared
-helpers — a single value satisfies both `ArgOption` and `FlagOption`, so the
+helpers: a single value satisfies both `ArgOption` and `FlagOption`, so the
 same call works on positional args and flags.
 
 ### Flags (named options)
@@ -370,44 +349,40 @@ Flags follow a simpler cascade:
          │ no
 2. Environment →  `WithEnv` set and env var set and non-empty? →  parse and use
          │ no
-3. Default     →  constructor `defaultVal` on `WithFlag` / `WithSelectFlag` / …  →  use default
+3. Default     →  constructor `defaultVal` on `WithFlag` / `WithSelectFlag` / ...  →  use default
          │ no
 4. Required    →  WithRequired() was set? →  return error
          │ no
 5. Skip        →  value stays absent from context
 ```
 
-Flags do not support interactive prompts. This is enforced at compile time:
-`FlagOption` cannot be passed prompt-shaping options because they only exist as
-`ArgOption`. The architectural reason is that the flag cascade deliberately
-omits a prompt step; see
-[Args and flags are different](design-decisions.md#args-and-flags-are-different).
+> [!NOTE]
+> Flags do not support interactive prompts. This is enforced at compile time:
+> `FlagOption` cannot take prompt-shaping options (those exist only as
+> `ArgOption`).
 
 `Context` implements `context.Context`, so handlers can use `c` directly for
 cancellation, timeouts, and value propagation.
 
 ## Output System
 
-The `Context` provides three categories of output, all flowing through one
-sticky-error, color-aware writer per `Context`:
+`Context` has three output paths. They share one sticky-error, color-aware
+writer per invocation:
 
-- **Semantic output** — methods that convey meaning with styled symbols
-  (success, warn, error, info, print). Each accepts a message string and
-  optional alternating key-value pairs.
-- **Structured output** — methods for formatted data (tables, lists, trees, JSON
-  / YAML / TOML, dynamic-format encoding, syntax highlighting, progress bars).
-- **Diagnostic logging** — a standard `*slog.Logger` exposed via
-  `Context.Logger()`. Install via `nabat.WithLogger(*slog.Logger)` (bring your
-  own) or `nabat.WithExtension(logging.New(...))` (opinionated charm-styled
-  logger with optional --verbose / --log-level flag wiring). Without either,
-  `Context.Logger()` returns a discard logger.
+- **Semantic output**: styled symbols and a message (`Success`, `Warn`,
+  `Error`, `Info`, print helpers), with optional key-value pairs.
+- **Structured output**: tables, lists, trees, JSON / YAML / TOML, encoding,
+  highlighting, progress bars.
+- **Diagnostic logging**: `Context.Logger()` returns a `*slog.Logger`. Install
+  one with `nabat.WithLogger` or `nabat.WithExtension(logging.New(...))`
+  (themed logger, optional `--verbose` / `--log-level`). Otherwise you get a
+  discard logger.
 
 ### Terminal awareness
 
-In a TTY, colors render. When piped, the `NoTTY` color profile strips escape
-codes automatically. Semantic output, structured output, and progress bars all
-share the same writer, so a single I/O failure surfaces consistently via the
-writer's first-error semantics.
+TTY gets color. Pipes get the `NoTTY` profile (escape codes stripped). Semantic
+output, structured output, and progress bars share the writer, so the first I/O
+error sticks for the whole `Context`.
 
 ## Command Tree
 
@@ -454,9 +429,7 @@ passing them directly to `nabat.New(...)`:
 
 Help and version live in the core because they must install root-level flags
 (`--help`, `--version`). Extensions cannot modify the root command, so any
-feature that needs a root flag belongs in core. See
-[Help, version, and completion live in the core](design-decisions.md#help-version-and-completion-live-in-the-core)
-for the full rationale.
+feature that needs a root flag belongs in core.
 
 - **Help** has a two-axis design:
   - The persistent `--help`/`-h` flag and the custom Nabat renderer install
@@ -466,14 +439,14 @@ for the full rationale.
   - The `help <subcmd>` subcommand is opt-in via `WithHelpCommand` (mirroring
     `WithVersion`) with a nested `WithHelpCommandName` for the name. Without
     `WithHelpCommand`, no subcommand is installed.
-  - `WithoutHelp` opts out of the entire feature — see godoc.
+  - `WithoutHelp` opts out of the entire feature: see godoc.
 - **Version** is opt-in: pass `nabat.WithVersion("1.2.3")` to `New` and the App
   grows a `version` subcommand and a `--version`/`-v` flag. Configure via nested
-  `WithVersion*` / `WithoutVersion*` options — see godoc.
+  `WithVersion*` / `WithoutVersion*` options: see godoc.
 - **Completion** is opt-in: pass `nabat.WithCompletion()` to `New` and the App
   grows a `completion` subcommand with bash, zsh, fish, and PowerShell
   generators. Configure via nested `CompletionOption` values
-  (`WithCompletionName`, `WithCompletionHidden`, `WithCompletionShells`) — see
+  (`WithCompletionName`, `WithCompletionHidden`, `WithCompletionShells`): see
   godoc. Per-flag and per-positional dynamic candidates use `WithCompleter` and
   `WithPositionalCompleter` respectively and work whether or not
   `WithCompletion` is enabled (Cobra's hidden `__complete` command is always
@@ -481,15 +454,12 @@ for the full rationale.
 
 ## Opt-in Extensions
 
-Nabat ships two first-party extensions as subpackages (`nabat.dev/manpage`,
-`nabat.dev/logging`). Apps install them via
-`nabat.WithExtension(<package>.New(...))`. Each extension's `Init` receives an
-`AppSurface` and runs inside `New` after the root command and built-in help/version/completion are
+First-party extensions ship as `nabat.dev/manpage` and `nabat.dev/logging`.
+Install with `nabat.WithExtension(<package>.New(...))`. `Init` gets an
+`AppSurface` and runs inside `New` after help, version, and completion are
 wired.
 
-Extensions use `App.OnPreRun()` to install global hooks and `App.Command()` to
-add subcommands — the same public API available to third-party extensions. The
-`ErrHandled` sentinel allows pre-run hooks to signal that the invocation has
-been fully handled, short-circuiting the command handler. Built-in help and
-version use the same hook mechanism internally for `--help` and `--version`
-short-circuiting.
+They use the same public API as third-party code: `App.OnPreRun` for global
+hooks, `App.Command` for subcommands. Return `ErrHandled` from a pre-run hook
+to skip the command handler (help and version do this for `--help` /
+`--version`).

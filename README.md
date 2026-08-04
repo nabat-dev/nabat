@@ -5,11 +5,10 @@
 *From Persian نبات "rock candy"; /næˈbɑːt/ (nah-BAHT).*
 
 **Adaptive CLI framework for Go.**
-*Interactive input · Structured output · Built-in themes.*
+Typed args, structured output, and themes on top of Cobra.
 
 [![CI](https://github.com/nabat-dev/nabat/actions/workflows/ci.yml/badge.svg)](https://github.com/nabat-dev/nabat/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/nabat.dev.svg)](https://pkg.go.dev/nabat.dev)
-[![Go Report Card](https://goreportcard.com/badge/nabat.dev)](https://goreportcard.com/report/nabat.dev)
 [![codecov](https://codecov.io/gh/nabat-dev/nabat/branch/main/graph/badge.svg)](https://codecov.io/gh/nabat-dev/nabat)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nabat-dev/nabat)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -69,14 +68,12 @@
 
 ## What is Nabat?
 
-Nabat is an adaptive CLI framework for Go: typed positional args that resolve from CLI to env var to interactive prompt, structured output that stays pipe-friendly, and twelve built-in themes — all on [Cobra](https://github.com/spf13/cobra)'s command router.
+Nabat is an adaptive CLI framework for Go: typed positional args that resolve from CLI to env var to interactive prompt, structured output that stays pipe-friendly, and twelve built-in themes, all on [Cobra](https://github.com/spf13/cobra)'s command router.
 
 The name comes from Persian rock candy.
 Sugar crystals grow slowly around a simple thread.
 Nabat works the same way: start with a strong core, then add layers one by one.
 Read more in the [Brand Story](#brand-story).
-
----
 
 ![Deploy](https://nabat.dev/demos/deploy.gif)
 
@@ -97,23 +94,21 @@ Read more in the [Brand Story](#brand-story).
 - You need a zero-dependency library. Nabat uses `Cobra`, `Lip Gloss`, `Huh`, `Glamour`, and `Chroma`.
 - You want to replace Cobra's flag parser. Nabat delegates all flag work to `Cobra` and `pflag`.
 
----
-
 ## Features
 
-- **Cobra inside.** No new flag parser. No new completion engine. Same battle-tested core.
-- **Typed args and flags.** Define them with options. Copy them into a struct with `c.Bind` and handle its returned `error`.
-- **Adaptive args.** Each positional arg resolves from CLI, then env var, then prompt, then default – in that order.
+- **Cobra inside.** No new flag parser or completion engine. Same routing and flags you already know.
+- **Typed args and flags.** Define them with options, then copy into a struct with `c.Bind`.
+- **Adaptive args.** Each positional arg resolves from CLI, then env var, then prompt, then default.
 - **Styled help and version.** `--help` / `-h` is on by default. Version is opt-in with `WithVersion`.
-- **Shell completion.** Bash, Zsh, Fish, PowerShell – one line: `WithCompletion()`.
-- **Semantic output.** `c.Success`, `c.Warn`, `c.Error`, `c.Info` -- each goes to the right stream and uses the theme.
+- **Shell completion.** Bash, Zsh, Fish, PowerShell: one line with `WithCompletion()`.
+- **Semantic output.** `c.Success`, `c.Warn`, `c.Error`, `c.Info` write to the right stream and use the theme.
 - **Structured output.** `c.Table`, `c.List`, `c.Tree`, `c.JSON`, `c.YAML`, `c.TOML`, `c.Encode`, `c.Highlight`, `c.Markdown`, `c.ProgressBar`.
-- **Interactive layer.** `c.Spinner` (delayed single-line animation, no TUI probe leaks on fast paths), `c.Status` (multi-row live display with labels, priority sorting, column headers, and per-row icons), `c.Confirm`, and `c.Form` -- all built on [Huh](https://pkg.go.dev/charm.land/huh/v2) (`charm.land/huh/v2`). Seed widgets with `WithInitial` / `WithPrefill`; non-interactive fallbacks stay on `WithDefault`.
-- **Product chrome.** `c.Fields` for aligned key/value blocks and `c.Badge` for typed status chips (`IconSuccess`, `IconError`, ...).
-- **Twelve built-in themes.** Popular light and dark palettes (including Catppuccin, Dracula, Gruvbox, Nord, and Solarized) plus the Nabat brand theme. Access the active theme from a RunFunc via `c.Theme()`, `c.Style()`, and `c.Render()`.
+- **Interactive layer.** `c.Spinner`, `c.Status`, `c.Confirm`, and `c.Form` on [Huh](https://pkg.go.dev/charm.land/huh/v2). Seed with `WithInitial` / `WithPrefill`; non-interactive paths use `WithDefault`.
+- **Product chrome.** `c.Fields` for aligned key/value blocks and `c.Badge` for status chips.
+- **Twelve built-in themes.** Catppuccin, Dracula, Gruvbox, Nord, Solarized, and the Nabat brand theme, among others. Use `c.Theme()`, `c.Style()`, and `c.Render()` from a RunFunc.
 - **Pipe-friendly by default.** Honors `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`, and TTY detection.
 - **Fail fast.** Setup errors come back together as one `*ConfigErrors` from `New`.
-- **Test helpers.** The `nabattest` package runs your CLI inside `*testing.T` with explicit args, plus `Capture` and `Context` helpers for output and helper-unit tests.
+- **Test helpers.** `nabattest` runs your CLI inside `*testing.T`, with `Capture` and `Context` for output tests.
 
 ---
 
@@ -138,8 +133,6 @@ import (
     "nabat.dev/nabat/nabattest"  // test helpers: NewIO, NewTTYIO, Run, Capture, Context
 )
 ```
-
----
 
 ## Quick Start
 
@@ -200,7 +193,7 @@ func main() {
 }
 ```
 
-Opt-in extensions (man-page generation, structured logging, and more) are installed with `WithExtension` from their own subpackage — see [Extensions](#extensions).
+Opt-in extensions (man-page generation, structured logging, and more) are installed with `WithExtension` from their own subpackage; see [Extensions](#extensions).
 
 Try it:
 
@@ -211,8 +204,6 @@ go run . deploy --help    # styled, themed help
 go run . --version        # prints 0.1.0
 go run . completion bash  # shell completion script
 ```
-
----
 
 ## User Guide
 
@@ -250,7 +241,7 @@ Key root options:
 |-----------------------------|--------------------------------------------------------------------------------------------------------|
 | `WithDescription(text)`     | One-line description shown in help.                                                                    |
 | `WithLongDescription(text)` | Detailed description shown in full help.                                                               |
-| `WithEnvPrefix(prefix)`     | Prefix for env var lookup. Default: `UPPER(name)_` — for an app named `myctl` the default is `MYCTL_`. |
+| `WithEnvPrefix(prefix)`     | Prefix for env var lookup. Default: `UPPER(name)_`. For an app named `myctl` the default is `MYCTL_`. |
 | `WithIO(streams)`           | Replace the IO bundle. Tests use `nabattest.NewIO()`.                                                  |
 | `WithErrorHandler(fn)`      | Custom error display when `App.Run` fails.                                                             |
 | `WithLogger(logger)`        | Set a `*slog.Logger` for `Context.Logger()`.                                                           |
@@ -301,7 +292,7 @@ More command options:
 | `WithGroup("Operations")`  | Group commands in help output.                                |
 | `WithHidden()`             | Hide from help but keep it usable.                            |
 | `WithTypoHints("deploay")` | Suggest this command when the user makes a typo.              |
-| `WithAnnotation(key, val)` | Set a raw Cobra annotation — escape hatch for shell-completion directives or third-party tooling metadata. |
+| `WithAnnotation(key, val)` | Set a raw Cobra annotation (escape hatch for shell-completion directives or third-party tooling metadata). |
 | `WithExample(shell)`       | Example block in help. Uses shell syntax highlighting on TTY. |
 
 ### Positional Args
@@ -359,6 +350,7 @@ nabat.WithMultiSelectArg("services", []string{"web"}, []string{"web", "db", "cac
 services, err := c.BindAs[[]string]("services")
 ```
 
+> [!WARNING]
 > **Required args in non-TTY environments (CI, pipes):** when `WithRequired()` is set and stdin is not a terminal, Nabat returns an error instead of prompting. Provide the value via a CLI arg or add `WithEnv("KEY")` so it can also come from an environment variable.
 
 #### Adaptive Resolution
@@ -376,10 +368,10 @@ flowchart LR
     ttyCheck -->|no| def[Typed default] --> done
 ```
 
-1. **CLI argument** – the user passes it on the command line.
-2. **Env var** -- only if you added `WithEnv` to the arg. The env var name is built from the app prefix plus the key.
-3. **Interactive prompt** – only if stdin is a TTY and you declared a prompt (with `WithPrompt`).
-4. **Typed default** – the value you passed to `WithArg` or `WithSelectArg`.
+1. **CLI argument:** the user passes it on the command line.
+2. **Env var:** only if you added `WithEnv` to the arg. The env var name is built from the app prefix plus the key.
+3. **Interactive prompt:** only if stdin is a TTY and you declared a prompt (with `WithPrompt`).
+4. **Typed default:** the value you passed to `WithArg` or `WithSelectArg`.
 
 ![Cascade](https://nabat.dev/demos/cascade.gif)
 
@@ -498,7 +490,7 @@ nabat.WithFlag("config", "",
 
 Handlers read resolved args and flags with [`Context.Bind`](https://pkg.go.dev/nabat.dev/nabat#Context.Bind) or [`BindAs`](https://pkg.go.dev/nabat.dev/nabat#BindAs). Prefer **`Bind`** when you want several names at once and a single error return; use **`BindAs`** for one name with an explicit type (including in tests).
 
-**`Bind`** tags struct fields with `nabat:"name"` (the declared arg or flag name). Untagged fields are skipped; anonymous embedded structs without a tag are walked. Value fields are filled whenever a resolved value exists (including defaults). Pointer fields (`*int`, `*string`, …) stay `nil` when the user did not supply the value (CLI, env, or prompt) and it came only from a default — use them when you need to distinguish “explicit” from “default”. `Bind` returns an error for invalid targets, type mismatches, or tags that name nothing declared on the command.
+**`Bind`** tags struct fields with `nabat:"name"` (the declared arg or flag name). Untagged fields are skipped; anonymous embedded structs without a tag are walked. Value fields are filled whenever a resolved value exists (including defaults). Pointer fields (`*int`, `*string`, ...) stay `nil` when the user did not supply the value (CLI, env, or prompt) and it came only from a default; use them when you need to distinguish "explicit" from "default". `Bind` returns an error for invalid targets, type mismatches, or tags that name nothing declared on the command.
 
 ```go
 nabat.WithRun(func(c *nabat.Context) error {
@@ -519,7 +511,7 @@ nabat.WithRun(func(c *nabat.Context) error {
 
 |               | **`Bind`**                                                                                                     | **`BindAs`**                                             |
 |---------------|----------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
-| Shape         | `func (c *Context) Bind(target any) error` — non-nil `*struct`                                                 | `func BindAs[T any](c *Context, name string) (T, error)` |
+| Shape         | `func (c *Context) Bind(target any) error` (non-nil `*struct`)                                                 | `func BindAs[T any](c *Context, name string) (T, error)` |
 | Names         | Many fields per call (via tags)                                                                                | One `name` per call                                      |
 | Missing value | Tagged field keeps zero value if nothing was resolved (optional tags that mismatch declared names still error) | Errors if the name has no resolved entry                 |
 | Typical use   | Command handlers with multiple args/flags                                                                      | Single read, quick lookups, tests                        |
@@ -555,7 +547,7 @@ Prompts only run when stdin is a real terminal.
 In CI or pipes, Nabat falls back to the default or returns an error if the arg is required.
 
 `WithPrompt` attaches an interactive prompt to any arg. T is inferred from the
-sub-options' value arguments — no explicit type annotation is required:
+sub-options' value arguments; no explicit type annotation is required:
 
 ```go
 // String arg: T=string inferred from WithHint("alice")
@@ -605,7 +597,7 @@ nabat.WithArg("cert", "",
 
 Kind-specific sub-options ([WithAffirmative], [WithEditor], [WithFilePicker], etc.)
 are compile-time enforced: passing [WithEditor] to a bool field is a build error.
-[WithDefault], [WithInitial], [WithPrefill], and [WithValidate] are generic — T is inferred from the value.
+[WithDefault], [WithInitial], [WithPrefill], and [WithValidate] are generic; T is inferred from the value.
 
 **Initial values vs defaults:**
 
@@ -642,9 +634,8 @@ For destructive commands, prefer an explicit bypass over a silent default:
 | Moderate | y/N prompt | `WithYes(flags.Yes)` from `--yes` |
 | Severe | type the resource name | `WithConfirmValue` + `WithConfirmInput` from `--confirm=` |
 
-`WithYes` does not bypass type-to-confirm. When `WithConfirmValue` is set,
-only a matching `WithConfirmInput` (or an interactive match) proceeds;
-`WithDefault` is ignored in that mode too.
+> [!CAUTION]
+> `WithYes` does not bypass type-to-confirm. When `WithConfirmValue` is set, only a matching `WithConfirmInput` (or an interactive match) proceeds; `WithDefault` is ignored in that mode too.
 
 ```go
 // Moderate: require --yes in CI.
@@ -699,7 +690,7 @@ Return `nabat.ErrHandled` from any hook to stop the pipeline and exit with succe
 This is useful when a hook handles the response itself (for example, printing `--version` output) and the command handler should not run:
 
 ```go
-// app.OnPreRun is a global hook — fires before every command in the app.
+// app.OnPreRun is a global hook: fires before every command in the app.
 // Use WithPreRun inside WithCommand for a per-command hook instead.
 app.OnPreRun(func(c *nabat.Context) error {
     if showingVersion {
@@ -994,7 +985,7 @@ ok, err := c.Confirm("Delete everything?",
 )
 ```
 
-**Ad-hoc prompts** – kind is fixed by the method, so no type annotations:
+**Ad-hoc prompts:** kind is fixed by the method, so no type annotations:
 
 ```go
 // Single-line text
@@ -1019,14 +1010,14 @@ cert, err := c.FilePicker("Certificate",
 `c.Select` and `c.MultiSelect` are generic methods on `Context`. `E` is inferred from the type of the choices slice.
 
 ```go
-// Select — defaultVal is a positional arg; E inferred from choices
+// Select: defaultVal is a positional arg; E inferred from choices
 env, err := c.Select("Environment",
     []string{"staging", "production"},
     "staging",               // defaultVal (used when non-interactive)
     nabat.WithFiltering(true),
 )
 
-// MultiSelect — same pattern
+// MultiSelect: same pattern
 regions, err := c.MultiSelect("Regions",
     []string{"us", "eu", "ap"},
     []string{"us"},          // defaultVal
@@ -1034,7 +1025,7 @@ regions, err := c.MultiSelect("Regions",
 )
 ```
 
-**Form** – show a typed multi-field form:
+**Form:** show a typed multi-field form:
 
 ```go
 var name string
@@ -1360,7 +1351,7 @@ if err != nil {
 ### Common Pitfalls
 
 **Prompts do not appear in CI or piped scripts.**
-Nabat only shows interactive prompts when stdin is a real terminal. In CI, piped input, or non-interactive shells, the prompt step is skipped and Nabat uses the default value — or returns an error if `WithRequired()` was set. Supply the value via a CLI arg or add `WithEnv("KEY")` so it can come from an environment variable.
+Nabat only shows interactive prompts when stdin is a real terminal. In CI, piped input, or non-interactive shells, the prompt step is skipped and Nabat uses the default value, or returns an error if `WithRequired()` was set. Supply the value via a CLI arg or add `WithEnv("KEY")` so it can come from an environment variable.
 
 **`c.Success`, `c.Warn`, `c.Error`, and `c.Info` output is not in stdout.**
 These four helpers write to **stderr** (`errOut`), not stdout, so that piped stdout stays clean. In tests, name all four return values of `nabattest.NewIO()`:
@@ -1368,14 +1359,12 @@ These four helpers write to **stderr** (`errOut`), not stdout, so that piped std
 ```go
 io, in, out, errOut := nabattest.NewIO()
 // in     → stdin   (write to simulate user input)
-// out    → stdout  (Print, Println, Table, JSON, …)
+// out    → stdout  (Print, Println, Table, JSON, ...)
 // errOut → stderr  (Success, Warn, Error, Info)
 ```
 
 **Colors or styling do not appear.**
 Nabat disables colors automatically when it detects a non-terminal stream, or when the environment sets `NO_COLOR=1`, `CLICOLOR=0`, or `TERM=dumb`. This is intentional for pipes and log files. In tests, use `nabattest.NewTTYIO()` if you need the styled output code path.
-
----
 
 ## Extensions
 
@@ -1392,7 +1381,7 @@ nabat.New("myctl",
 
 ### Built-in Extensions
 
-**manpage** – adds a hidden `man` subcommand that generates roff man pages:
+**manpage:** adds a hidden `man` subcommand that generates roff man pages:
 
 ```go
 import "nabat.dev/manpage"
@@ -1405,7 +1394,7 @@ nabat.WithExtension(manpage.New(
 ))
 ```
 
-**logging** – installs a themed `*slog.Logger` with flag wiring:
+**logging:** installs a themed `*slog.Logger` with flag wiring:
 
 ```go
 import "nabat.dev/logging"
@@ -1456,8 +1445,6 @@ The public surface is available to extensions:
 | `app.EnvPrefix()`                | The env var prefix.                                                        |
 | `app.UnsafeRoot()`               | Escape hatch: the underlying `*cobra.Command`.                             |
 | `cmd.UnsafeCobra()`              | Escape hatch: the Cobra command for any `*Command`.                        |
-
----
 
 ## Testing
 
@@ -1519,8 +1506,6 @@ For parallel tests, use `nabattest.RunParallel` instead of `nabattest.Run`.
 Note: `WithEnvVars` is not allowed with `RunParallel`.
 Set env vars before calling `t.Parallel()` in that case.
 
----
-
 ## Examples
 
 Two runnable programs live in [`examples/`](examples/):
@@ -1542,8 +1527,6 @@ go run ./examples/deploy deploy staging
 go run ./examples/deploy deploy --help
 ```
 
----
-
 ## Subpackages
 
 | Package                                            | Role                                                                                                             |
@@ -1553,8 +1536,6 @@ go run ./examples/deploy deploy --help
 | [`nabat.dev/theme`](theme)                         | Theme primitives, built-in catalog, JSON Schema, name constants.                                                 |
 | [`nabat.dev/manpage`](manpage)                     | Extension: `man` subcommand for roff man page generation.                                                        |
 | [`nabat.dev/logging`](logging)                     | Extension: themed `*slog.Logger` with `--verbose` / `--log-level` flag wiring.                                   |
-
----
 
 ## Architecture
 
@@ -1603,29 +1584,15 @@ Full details: [docs/architecture.md](docs/architecture.md).
 
 ## Brand Story
 
-Nabat is named after Persian rock candy.
-Clear sugar crystals grow slowly around a simple thread.
+Nabat is named after Persian rock candy: clear sugar crystals grow slowly around a simple thread.
 
-Building a CLI with Nabat works the same way:
-
-- **Start with the thread** — Cobra handles routing, flags, and shell completion.
-- **Add crystals one at a time** — adaptive args, interactive prompts, structured output, built-in themes.
-- **End with a clear, finished tool** — no hidden state, no opaque magic.
-
-The metaphor is not just decoration.
-It matches the developer experience: layer by layer, crystal by crystal.
-
----
+That is how you build with Nabat too. Cobra is the thread (routing, flags, completion). Adaptive args, prompts, structured output, and themes are the crystals you add one at a time.
 
 ## Acknowledgments
 
-We want to thank two projects that make Nabat possible.
+**[Cobra](https://cobra.dev/):** command trees, flags, and shell completion that many Go tools already trust.
 
-**[Cobra](https://cobra.dev/)** — Thank you to the Cobra team and community. They built the CLI framework many Go tools rely on: command trees, flags, and shell completion you can trust in real workloads.
-
-**[Charm](https://charm.land/)** — Thank you to Charm for the libraries that add color, layout, and prompts to the terminal. They turn plain black-and-white output into something easier to read and friendlier to use.
-
----
+**[Charm](https://charm.land/):** Lip Gloss, Huh, Glamour, and the rest of the terminal UI stack Nabat builds on.
 
 ## Development
 
@@ -1648,22 +1615,17 @@ golangci-lint run
 go test -race -shuffle=on -covermode=atomic -coverpkg=./... -coverprofile=coverage.out -timeout 10m ./...
 ```
 
----
-
 ## Contributing
 
 Issues and pull requests are welcome.
 Fork the repository, create a branch from `main`, make your changes, and open a pull request.
-CI runs format checks, lint, and the full test suite with race detection — all must pass before merge.
+CI runs format checks, lint, and the full test suite with race detection; all must pass before merge.
 Please read these documents before you open a PR:
 
 - [Design Principles](docs/design-principles.md)
-- [Design Decisions](docs/design-decisions.md)
 - [Architecture](docs/architecture.md)
 - [Documentation Standards](docs/documentation-standards.md)
 - [Testing Standards](docs/testing-standards.md)
-
----
 
 ## License
 
