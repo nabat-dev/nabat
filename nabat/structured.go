@@ -15,20 +15,18 @@
 package nabat
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
-	"gopkg.in/yaml.v3"
 )
 
-// Format names a structured encoding used by [Context.Encode]. It is a type-safe
-// enum; the zero value is invalid so accidentally defaulting to JSON is
-// impossible.
+// Format names a structured encoding used by [Context.Encode] and [Marshal].
+// It is a type-safe enum; the zero value is invalid so accidentally defaulting
+// to JSON is impossible.
 type Format uint8
 
 const (
@@ -59,16 +57,14 @@ func (f Format) String() string {
 // chroma style when set, or plain text when highlighting is disabled.
 //
 // Errors:
-//   - "nabat: json encoding failed: ..." when [encoding/json.MarshalIndent] fails
+//   - "nabat: json encoding failed: ..." when marshaling fails
 //   - errors from writing to [Context.IO.Out]
 func (c *Context) JSON(v any) error {
-	b, err := json.MarshalIndent(v, "", "  ")
+	b, err := Marshal(v, FormatJSON)
 	if err != nil {
-		return fmt.Errorf("nabat: json encoding failed: %w", err)
+		return err
 	}
-	w := writer{w: c.io.Out}
-	w.println(c.highlight(string(b), "json"))
-	return w.Err()
+	return c.PrintHighlight(string(b), "json")
 }
 
 // YAML writes v as YAML to [Context.IO.Out], with highlighting behavior like
@@ -78,13 +74,11 @@ func (c *Context) JSON(v any) error {
 //   - "nabat: yaml encoding failed: ..." when marshaling fails
 //   - errors from writing to [Context.IO.Out]
 func (c *Context) YAML(v any) error {
-	b, err := yaml.Marshal(v)
+	b, err := Marshal(v, FormatYAML)
 	if err != nil {
-		return fmt.Errorf("nabat: yaml encoding failed: %w", err)
+		return err
 	}
-	w := writer{w: c.io.Out}
-	w.println(c.highlight(strings.TrimRight(string(b), "\n"), "yaml"))
-	return w.Err()
+	return c.PrintHighlight(strings.TrimRight(string(b), "\n"), "yaml")
 }
 
 // TOML writes v as TOML to [Context.IO.Out], with highlighting behavior like
@@ -94,13 +88,11 @@ func (c *Context) YAML(v any) error {
 //   - "nabat: toml encoding failed: ..." when encoding fails
 //   - errors from writing to [Context.IO.Out]
 func (c *Context) TOML(v any) error {
-	var buf strings.Builder
-	if err := toml.NewEncoder(&buf).Encode(v); err != nil {
-		return fmt.Errorf("nabat: toml encoding failed: %w", err)
+	b, err := Marshal(v, FormatTOML)
+	if err != nil {
+		return err
 	}
-	w := writer{w: c.io.Out}
-	w.println(c.highlight(strings.TrimRight(buf.String(), "\n"), "toml"))
-	return w.Err()
+	return c.PrintHighlight(string(b), "toml")
 }
 
 // Encode writes v using [FormatJSON], [FormatYAML], or [FormatTOML], delegating to
@@ -111,7 +103,7 @@ func (c *Context) TOML(v any) error {
 //	return c.Encode(payload, FormatJSON)
 //
 // Errors:
-//   - "nabat: unknown format %q" when f is not one of the [Format] constants
+//   - "nabat: unknown format %d" when f is not one of the [Format] constants
 //   - errors from the selected encoder
 func (c *Context) Encode(v any, f Format) error {
 	switch f {
@@ -126,19 +118,13 @@ func (c *Context) Encode(v any, f Format) error {
 	}
 }
 
-// Highlight writes code to [Context.IO.Out] using a Chroma lexer named lang.
-// When the lexer or formatter is unavailable, or when the [Theme] disables chroma,
-// it writes the original code unchanged.
-//
-// Errors:
-//   - errors from writing to [Context.IO.Out]
-func (c *Context) Highlight(code, lang string) error {
-	w := writer{w: c.io.Out}
-	w.println(c.highlight(code, lang))
-	return w.Err()
-}
-
-func (c *Context) highlight(code, lang string) string {
+// HighlightString returns code with Chroma syntax highlighting applied using
+// the active theme. It returns code unchanged when the lexer or formatter is
+// unavailable, or when the theme disables chroma.
+func (c *Context) HighlightString(code, lang string) string {
+	if c == nil || c.app == nil {
+		return code
+	}
 	s := c.app.Theme().Chroma()
 	if s == nil {
 		return code
@@ -161,4 +147,35 @@ func (c *Context) highlight(code, lang string) string {
 		return code
 	}
 	return buf.String()
+}
+
+// FprintHighlight writes highlighted code to w using the active theme.
+//
+// Errors:
+//   - errors from writing to w
+func (c *Context) FprintHighlight(w io.Writer, code, lang string) error {
+	out := writer{w: w}
+	out.println(c.HighlightString(code, lang))
+	return out.Err()
+}
+
+// PrintHighlight writes highlighted code to [Context.IO.Out].
+//
+// Errors:
+//   - errors from writing to [Context.IO.Out]
+func (c *Context) PrintHighlight(code, lang string) error {
+	return c.FprintHighlight(c.io.Out, code, lang)
+}
+
+// Highlight writes code to [Context.IO.Out] using a Chroma lexer named lang.
+// When the lexer or formatter is unavailable, or when the [Theme] disables chroma,
+// it writes the original code unchanged.
+//
+// Prefer [Context.HighlightString] when you need the highlighted string without
+// writing, or [Context.FprintHighlight] to target an arbitrary writer.
+//
+// Errors:
+//   - errors from writing to [Context.IO.Out]
+func (c *Context) Highlight(code, lang string) error {
+	return c.PrintHighlight(code, lang)
 }

@@ -331,10 +331,45 @@ func WithHint[T TextInput](v T) FieldOption[T] {
 
 // WithDefault sets the value returned when the terminal is non-interactive.
 // T is inferred from the value: WithDefault("anon") ⇒ T=string.
+//
+// WithDefault does not seed the interactive widget; use [WithInitial] for
+// that, or [WithPrefill] to set both.
 func WithDefault[T any](v T) FieldOption[T] {
 	return fieldOpt[T]{fn: func(pc *promptConfig) error {
 		pc.fallback = v
 		pc.hasFallback = true
+		return nil
+	}}
+}
+
+// WithInitial sets the starting value shown in the interactive TTY widget.
+// T is inferred from the value: WithInitial(true) ⇒ T=bool.
+//
+// When set, WithInitial overwrites any value already stored in the target
+// pointer before the widget runs. An explicit zero (for example
+// WithInitial(0) or WithInitial(false)) is tracked via hasInitial so it is
+// distinguishable from "no initial was provided".
+//
+// WithInitial does not affect non-interactive resolution; use [WithDefault]
+// for that, or [WithPrefill] to set both.
+func WithInitial[T any](v T) FieldOption[T] {
+	return fieldOpt[T]{fn: func(pc *promptConfig) error {
+		pc.initial = v
+		pc.hasInitial = true
+		return nil
+	}}
+}
+
+// WithPrefill sets both the non-interactive fallback ([WithDefault]) and the
+// interactive starting value ([WithInitial]) to v. It is the convenience
+// option for the common wizard case where the same seed applies in both
+// environments.
+func WithPrefill[T any](v T) FieldOption[T] {
+	return fieldOpt[T]{fn: func(pc *promptConfig) error {
+		pc.fallback = v
+		pc.hasFallback = true
+		pc.initial = v
+		pc.hasInitial = true
 		return nil
 	}}
 }

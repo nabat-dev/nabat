@@ -307,6 +307,9 @@ func WithFormField[T FormFieldValue](
 			}
 			fallback = v
 		}
+		// Seed the interactive widget from WithInitial / WithPrefill.
+		// This overwrites any value already stored in the target pointer.
+		applyInitial(target, pc)
 		return typedFormField[T]{
 			title:    title,
 			target:   target,
@@ -559,6 +562,7 @@ func buildFormField[T FormFieldValue](target *T, pc promptConfig) func() (huh.Fi
 }
 
 func buildInputField(target *string, pc promptConfig) huh.Field {
+	applyInitial(target, pc)
 	f := huh.NewInput().Title(pc.text).Value(target)
 	if pc.description != "" {
 		f = f.Description(pc.description)
@@ -586,6 +590,7 @@ func buildInputField(target *string, pc promptConfig) huh.Field {
 }
 
 func buildConfirmField(target *bool, pc promptConfig) huh.Field {
+	applyInitial(target, pc)
 	f := huh.NewConfirm().Title(pc.text).Value(target)
 	if pc.description != "" {
 		f = f.Description(pc.description)
@@ -607,6 +612,7 @@ func buildConfirmField(target *bool, pc promptConfig) huh.Field {
 }
 
 func buildTextField(target *string, pc promptConfig) huh.Field {
+	applyInitial(target, pc)
 	f := huh.NewText().Title(pc.text).Value(target)
 	if pc.description != "" {
 		f = f.Description(pc.description)
@@ -634,6 +640,7 @@ func buildTextField(target *string, pc promptConfig) huh.Field {
 }
 
 func buildFileField(target *string, pc promptConfig) huh.Field {
+	applyInitial(target, pc)
 	f := huh.NewFilePicker().Title(pc.text).Value(target)
 	if pc.description != "" {
 		f = f.Description(pc.description)
@@ -669,6 +676,7 @@ func buildFileField(target *string, pc promptConfig) huh.Field {
 // Pre-populating raw formats *target with [fmt.Sprint] to show the current or
 // default value.
 func buildNumericInputField[T FormFieldValue](target *T, pc promptConfig) huh.Field {
+	applyInitial(target, pc)
 	raw := fmt.Sprint(*target)
 	f := huh.NewInput().Title(pc.text).Value(&raw)
 	if pc.description != "" {

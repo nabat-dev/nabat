@@ -19,7 +19,10 @@ import (
 	"log/slog"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
+
+	"nabat.dev/theme"
 )
 
 // Context is the per-invocation runtime passed to each [RunFunc].
@@ -189,6 +192,28 @@ func (c *Context) Logger() *slog.Logger {
 		return c.logger
 	}
 	return discardLogger
+}
+
+// Theme returns the app's resolved theme for this invocation.
+// It matches [App.Theme] on the parent app.
+func (c *Context) Theme() theme.ResolvedTheme {
+	if c == nil || c.app == nil {
+		return theme.ResolvedTheme{}
+	}
+	return c.app.Theme()
+}
+
+// Style returns the lipgloss style for tok from the active theme.
+// It is sugar for c.Theme().Style(tok).
+func (c *Context) Style(tok theme.Token) lipgloss.Style {
+	return c.Theme().Style(tok)
+}
+
+// Render styles s with the lipgloss style for tok and returns the result.
+// NO_COLOR and non-TTY stripping remain the responsibility of the IO writers
+// that eventually print the string; Render itself always applies the theme.
+func (c *Context) Render(tok theme.Token, s string) string {
+	return c.Style(tok).Render(s)
 }
 
 func (a *App) newContext(cmd *cobra.Command, args []string) (*Context, error) {

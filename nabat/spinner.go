@@ -16,7 +16,6 @@ package nabat
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -24,9 +23,12 @@ import (
 	"charm.land/bubbles/v2/spinner"
 
 	"nabat.dev/theme"
-
-	tea "charm.land/bubbletea/v2"
 )
+
+// defaultSpinnerDelay is how long work must run before the animated spinner
+// appears. Faster completions print a static success/error line instead, so
+// short idempotent paths never open a TUI or leak terminal probe replies.
+const defaultSpinnerDelay = 200 * time.Millisecond
 
 // SpinnerType selects spinner frames for [WithSpinnerType], [Context.Spinner],
 // and [Context.Status].
@@ -120,10 +122,17 @@ type statusOnlyOption func(*statusConfig) error
 
 func (f statusOnlyOption) applyStatus(c *statusConfig) error { return f(c) }
 
+// spinnerOnlyOption wraps a spinner-specific function as a [SpinnerOption].
+type spinnerOnlyOption func(*spinnerConfig) error
+
+func (f spinnerOnlyOption) applySpinner(c *spinnerConfig) error { return f(c) }
+
 type spinnerConfig struct {
 	title       string
 	spinnerType SpinnerType
 	icons       Icons
+	delay       time.Duration
+	delaySet    bool
 }
 
 // WithSpinnerType sets the spinner animation preset. This option can be passed
@@ -156,6 +165,25 @@ func WithSpinnerIcons(icons Icons) spinnerStatusOption {
 		spinnerFn: func(c *spinnerConfig) error { c.icons = icons; return nil },
 		statusFn:  func(c *statusConfig) error { c.icons = icons; return nil },
 	}
+}
+
+// WithSpinnerDelay sets how long work must run before the animated spinner
+// appears. The default is 200ms. Pass 0 to start animation immediately.
+// Completing before the delay prints a static success/error line on stderr
+// and never starts the animation.
+//
+// Example:
+//
+//	c.Spinner(fn, WithTitle("Deploying"), WithSpinnerDelay(0))
+func WithSpinnerDelay(d time.Duration) SpinnerOption {
+	return spinnerOnlyOption(func(c *spinnerConfig) error {
+		if d < 0 {
+			return fmt.Errorf("nabat: WithSpinnerDelay: delay must be >= 0")
+		}
+		c.delay = d
+		c.delaySet = true
+		return nil
+	})
 }
 
 // Spinner is the live handle passed to the [Context.Spinner] callback. Call
@@ -194,23 +222,49 @@ func (s *Spinner) completionState(fnErr error) RowState {
 	return RowSuccess
 }
 
+func (s *Spinner) completionIcon(fnErr error) string {
+	state := s.completionState(fnErr)
+	glyph := staticIcon(state, s.icons)
+	switch state {
+	case RowSuccess:
+		return s.th.Style(theme.StatusSuccess).Render(glyph)
+	case RowError:
+		return s.th.Style(theme.StatusError).Render(glyph)
+	case RowWarning:
+		return s.th.Style(theme.StatusWarning).Render(glyph)
+	default:
+		return s.th.Style(theme.TextMuted).Render(glyph)
+	}
+}
+
 // Spinner runs fn while showing an animated single-line spinner on stderr in
 // interactive terminals. The callback receives a [*Spinner] handle; call
 // [Spinner.SetText] to update the header title while the work runs.
+//
+// Animation starts only after a short delay (default 200ms; see
+// [WithSpinnerDelay]). If fn returns before the delay, Spinner prints a static
+// success or error line on stderr and never starts the animation. This avoids
+// terminal capability-probe leaks from short-lived TUI programs.
+//
+// On a TTY, fn runs in a separate goroutine while the calling goroutine drives
+// the animation loop. Spinner returns only after fn returns. Context
+// cancellation is observed by the animation loop, but does not preempt fn;
+// the loop waits for fn to finish, then returns [context.Canceled] when fn
+// itself returned nil.
 //
 // On completion the final state persists as static text in the terminal
 // scrollback. The header icon is "✓" on success and "✗" on error.
 //
 // When stderr is not a terminal, the title is printed once as a plain line and
-// fn runs without animation.
+// fn runs without animation on the calling goroutine.
 //
 // For multi-row live status displays use [Context.Status] instead.
 //
 // Errors:
-//   - any error returned by fn
+//   - any error returned by fn (preferred over write or cancel errors)
+//   - errors from writing the spinner line to stderr
 //   - [*ConfigErrors] from option validation
-//   - [context.Canceled] when the user interrupts with ctrl+c or the context
-//     is canceled
+//   - [context.Canceled] when the context is canceled and fn returned nil
 //
 // Pass [WithTitle] for the initial header text. The signature matches
 // [Context.Status]: callback first, then options.
@@ -233,6 +287,11 @@ func (c *Context) Spinner(fn func(*Spinner) error, opts ...SpinnerOption) error 
 		return &errs
 	}
 
+	delay := defaultSpinnerDelay
+	if cfg.delaySet {
+		delay = cfg.delay
+	}
+
 	handle := &Spinner{
 		text:  cfg.title,
 		icons: cfg.icons,
@@ -250,39 +309,137 @@ func (c *Context) Spinner(fn func(*Spinner) error, opts ...SpinnerOption) error 
 		return fn(handle)
 	}
 
-	rt := c.app.Theme()
-	info := rt.Style(theme.StatusInfo)
-	activeStyle := rt.Style(theme.SpinnerActive)
-	model := newSpinnerModel(
-		spinner.New(
-			spinner.WithSpinner(spinner.Spinner(cfg.spinnerType)),
-			spinner.WithStyle(info),
-		),
-		handle,
-		info,
-		activeStyle,
-		rt,
-		fn,
+	return c.runTTYSpinner(handle, cfg, delay, fn)
+}
+
+// runTTYSpinner animates a single line on stderr using ANSI rewrite, without
+// Bubble Tea. Work runs in a goroutine; animation starts after delay.
+func (c *Context) runTTYSpinner(
+	handle *Spinner,
+	cfg *spinnerConfig,
+	delay time.Duration,
+	fn func(*Spinner) error,
+) error {
+	done := make(chan error, 1)
+	go func() {
+		done <- fn(handle)
+	}()
+
+	w := c.io.RawErrOut()
+	sp := spinner.Spinner(cfg.spinnerType)
+	frames := sp.Frames
+	if len(frames) == 0 {
+		frames = spinner.Dot.Frames
+	}
+	fps := sp.FPS
+	if fps <= 0 {
+		fps = 100 * time.Millisecond
+	}
+
+	titleStyle := handle.th.Style(theme.StatusInfo)
+	activeStyle := handle.th.Style(theme.SpinnerActive)
+
+	var (
+		shown    bool
+		frameIdx int
 	)
 
-	final, runErr := tea.NewProgram(
-		model,
-		tea.WithContext(c),
-		tea.WithOutput(c.io.RawErrOut()),
-		tea.WithInput(c.io.RawIn()),
-	).Run()
-
-	if m, ok := final.(spinnerModel); ok && m.err != nil {
-		return m.err
+	writeLive := func() error {
+		prefix := activeStyle.Render(frames[frameIdx%len(frames)])
+		title := handle.title()
+		var err error
+		if title != "" {
+			_, err = fmt.Fprintf(w, "\r\033[K%s %s", prefix, titleStyle.Render(title))
+		} else {
+			_, err = fmt.Fprintf(w, "\r\033[K%s", prefix)
+		}
+		return err
 	}
-	switch {
-	case errors.Is(runErr, tea.ErrInterrupted):
-		return context.Canceled
-	case errors.Is(runErr, tea.ErrProgramKilled):
+
+	writeDone := func(fnErr error, animated bool) error {
+		icon := handle.completionIcon(fnErr)
+		title := handle.title()
+		var err error
+		if animated {
+			if title != "" {
+				_, err = fmt.Fprintf(w, "\r\033[K%s %s\n", icon, titleStyle.Render(title))
+			} else {
+				_, err = fmt.Fprintf(w, "\r\033[K%s\n", icon)
+			}
+			return err
+		}
+		// Fast path: static acknowledgment line, never animated.
+		if title != "" {
+			_, err = fmt.Fprintf(w, "%s %s\n", icon, titleStyle.Render(title))
+		} else {
+			_, err = fmt.Fprintf(w, "%s\n", icon)
+		}
+		return err
+	}
+
+	// finish prefers fnErr, then a prior live-frame write error, then the
+	// final-line write error, then context cancellation.
+	finish := func(fnErr error, animated bool, cancel bool, liveErr error) error {
+		wErr := writeDone(fnErr, animated)
+		if fnErr != nil {
+			return fnErr
+		}
+		if liveErr != nil {
+			return liveErr
+		}
+		if wErr != nil {
+			return wErr
+		}
 		if cerr := c.Err(); cerr != nil {
 			return cerr
 		}
-		return context.Canceled
+		if cancel {
+			return context.Canceled
+		}
+		return nil
 	}
-	return runErr
+
+	var delayC <-chan time.Time
+	var delayTimer *time.Timer
+	if delay <= 0 {
+		// Start animation on the first loop iteration.
+		shown = true
+		if err := writeLive(); err != nil {
+			return finish(<-done, false, false, err)
+		}
+	} else {
+		delayTimer = time.NewTimer(delay)
+		delayC = delayTimer.C
+	}
+	if delayTimer != nil {
+		defer delayTimer.Stop()
+	}
+
+	ticker := time.NewTicker(fps)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			return finish(err, shown, false, nil)
+		case <-c.Done():
+			return finish(<-done, shown, true, nil)
+		case <-delayC:
+			delayC = nil
+			if !shown {
+				shown = true
+				if err := writeLive(); err != nil {
+					return finish(<-done, false, false, err)
+				}
+			}
+		case <-ticker.C:
+			if !shown {
+				continue
+			}
+			frameIdx++
+			if err := writeLive(); err != nil {
+				return finish(<-done, shown, false, err)
+			}
+		}
+	}
 }

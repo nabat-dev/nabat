@@ -15,6 +15,7 @@
 package nabattest
 
 import (
+	"bytes"
 	"os"
 	"testing"
 
@@ -85,4 +86,63 @@ func TestNewIO_defaultsToNonTTY(t *testing.T) {
 	assert.False(t, ios.IsStdoutTTY())
 	assert.False(t, ios.IsStderrTTY())
 	assert.False(t, ios.IsInteractive())
+}
+
+func TestCaptureReturnsOutput(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io),
+		nabat.WithCommand("run", nabat.WithRun(func(c *nabat.Context) error {
+			c.Println("stdout-line")
+			c.Success("stderr-line")
+			return nil
+		})),
+	)
+	got := Capture(t, app, []string{"run"})
+	require.NoError(t, got.Err)
+	require.NotNil(t, got.Stdout)
+	require.NotNil(t, got.Stderr)
+	assert.Contains(t, got.Stdout.String(), "stdout-line")
+	assert.Contains(t, got.Stderr.String(), "stderr-line")
+}
+
+func TestCaptureReturnsError(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io),
+		nabat.WithCommand("run", nabat.WithRun(func(c *nabat.Context) error {
+			return assert.AnError
+		})),
+	)
+	got := Capture(t, app, []string{"run"})
+	require.Error(t, got.Err)
+	assert.ErrorIs(t, got.Err, assert.AnError)
+}
+
+func TestContextReturnsFunctionalContext(t *testing.T) {
+	t.Parallel()
+
+	io, _, out, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	c := Context(t, app)
+	require.NotNil(t, c)
+	badge := c.Badge(nabat.IconSuccess, "running")
+	assert.Contains(t, badge, "running")
+	c.Fields([]nabat.Field{{Key: "K", Value: "V"}}).Print()
+	assert.Contains(t, out.String(), "K")
+}
+
+func TestContextHasBufferedIO(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	c := Context(t, app)
+	require.NotNil(t, c)
+	require.NotNil(t, c.IO())
+	assert.Same(t, io, c.IO())
+	_, ok := c.IO().RawOut().(*bytes.Buffer)
+	assert.True(t, ok, "RawOut should be a *bytes.Buffer from NewIO")
 }

@@ -93,12 +93,42 @@ type promptConfig struct {
 	validate func(any) error
 
 	// fallback / hasFallback supply a default to use when a prompt is
-	// skipped because the program is non-interactive. Set by [WithDefault].
+	// skipped because the program is non-interactive. Set by [WithDefault]
+	// and [WithPrefill].
 	fallback    any
 	hasFallback bool
+
+	// initial / hasInitial supply the starting value shown in the TTY
+	// widget. Set by [WithInitial] and [WithPrefill]. Distinct from
+	// fallback: initial seeds the interactive UI; fallback is returned
+	// when the program is non-interactive.
+	initial    any
+	hasInitial bool
+
+	// Confirm-specific bypass and type-to-confirm fields. Set by
+	// [WithYes], [WithConfirmValue], [WithConfirmInput], [WithBypassHint].
+	bypassYes    bool
+	confirmValue string
+	confirmInput string
+	bypassHint   string
 
 	// optionsFunc / optionsFuncBinds support dynamic select choices.
 	// Set by [WithOptionsFunc]. Stored as any; the build closure casts back.
 	optionsFunc      any
 	optionsFuncBinds any
+}
+
+// applyInitial writes the interactive starting value into target when
+// [WithInitial] or [WithPrefill] was set. A type mismatch is a no-op: the
+// option applicator already stores a value of the correct T, so a mismatch
+// indicates an internal wiring bug rather than caller input.
+func applyInitial[T any](target *T, pc promptConfig) {
+	if target == nil || !pc.hasInitial {
+		return
+	}
+	v, ok := pc.initial.(T)
+	if !ok {
+		return
+	}
+	*target = v
 }

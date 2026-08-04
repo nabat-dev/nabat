@@ -254,6 +254,137 @@ func TestWithDefaultTyped(t *testing.T) {
 	})
 }
 
+func TestWithInitialTyped(t *testing.T) {
+	t.Parallel()
+
+	t.Run("string initial", func(t *testing.T) {
+		t.Parallel()
+		var pc promptConfig
+		require.NoError(t, WithInitial("alice").apply(&pc))
+		assert.True(t, pc.hasInitial)
+		assert.Equal(t, "alice", pc.initial)
+		assert.False(t, pc.hasFallback)
+	})
+
+	t.Run("bool initial true", func(t *testing.T) {
+		t.Parallel()
+		var pc promptConfig
+		require.NoError(t, WithInitial(true).apply(&pc))
+		assert.True(t, pc.hasInitial)
+		assert.Equal(t, true, pc.initial)
+	})
+
+	t.Run("explicit zero is tracked", func(t *testing.T) {
+		t.Parallel()
+		var pc promptConfig
+		require.NoError(t, WithInitial(0).apply(&pc))
+		assert.True(t, pc.hasInitial, "explicit zero must set hasInitial")
+		assert.Equal(t, 0, pc.initial)
+	})
+
+	t.Run("explicit false is tracked", func(t *testing.T) {
+		t.Parallel()
+		var pc promptConfig
+		require.NoError(t, WithInitial(false).apply(&pc))
+		assert.True(t, pc.hasInitial, "explicit false must set hasInitial")
+		assert.Equal(t, false, pc.initial)
+	})
+}
+
+func TestWithPrefillTyped(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sets both fallback and initial", func(t *testing.T) {
+		t.Parallel()
+		var pc promptConfig
+		require.NoError(t, WithPrefill("2").apply(&pc))
+		assert.True(t, pc.hasFallback)
+		assert.Equal(t, "2", pc.fallback)
+		assert.True(t, pc.hasInitial)
+		assert.Equal(t, "2", pc.initial)
+	})
+}
+
+func TestApplyInitialSeedsTarget(t *testing.T) {
+	t.Parallel()
+
+	t.Run("overwrites existing pointer value", func(t *testing.T) {
+		t.Parallel()
+		out := "old"
+		pc := promptConfig{initial: "new", hasInitial: true}
+		applyInitial(&out, pc)
+		assert.Equal(t, "new", out)
+	})
+
+	t.Run("no-op when hasInitial is false", func(t *testing.T) {
+		t.Parallel()
+		out := "keep"
+		applyInitial(&out, promptConfig{})
+		assert.Equal(t, "keep", out)
+	})
+
+	t.Run("confirm starts on Yes", func(t *testing.T) {
+		t.Parallel()
+		var out bool
+		pc := promptConfig{initial: true, hasInitial: true}
+		_ = buildConfirmField(&out, pc)
+		assert.True(t, out, "WithInitial(true) must seed confirm target to true")
+	})
+
+	t.Run("input starts with seed", func(t *testing.T) {
+		t.Parallel()
+		var out string
+		pc := promptConfig{text: "Name", initial: "alice", hasInitial: true}
+		_ = buildInputField(&out, pc)
+		assert.Equal(t, "alice", out)
+	})
+}
+
+func TestWithDefaultStillWorksNonInteractive(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app := MustNew("test", WithIO(io))
+	var got string
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		var err error
+		got, err = c.Input("name", WithDefault("x"))
+		return err
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	assert.Equal(t, "x", got)
+}
+
+func TestWithPrefillNonInteractiveReturnsFallback(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app := MustNew("test", WithIO(io))
+	var got string
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		var err error
+		got, err = c.Input("name", WithPrefill("seed"))
+		return err
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	assert.Equal(t, "seed", got)
+}
+
+func TestWithInitialDoesNotProvideNonInteractiveFallback(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app := MustNew("test", WithIO(io))
+	var got error
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		_, got = c.Input("name", WithInitial("seed"))
+		return nil
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	require.Error(t, got)
+	assert.Contains(t, got.Error(), "requires interactive terminal")
+}
+
 func TestWithValidateTypedDispatch(t *testing.T) {
 	t.Parallel()
 

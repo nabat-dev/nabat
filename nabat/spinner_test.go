@@ -15,10 +15,14 @@
 package nabat
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,4 +166,222 @@ func TestSpinnerEmptyTitleSkipsFallbackLine(t *testing.T) {
 	require.NoError(t, Run(t, app, []string{"run"}))
 	assert.Empty(t, stderr.String(),
 		"empty title must not produce any ErrOut output")
+}
+
+func TestSpinnerFastPathNoAnimation(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		io, _, _, stderr := testTTYIO()
+		app := MustNew("test", WithIO(io))
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			return c.Spinner(func(_ *Spinner) error {
+				time.Sleep(10 * time.Millisecond)
+				return nil
+			}, WithTitle("Quick"), WithSpinnerDelay(200*time.Millisecond))
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+
+		out := stderr.String()
+		assert.Contains(t, out, "✓")
+		assert.Contains(t, out, "Quick")
+		assert.NotContains(t, out, "\r", "fast path must not use carriage-return animation")
+	})
+}
+
+func TestSpinnerSlowPathAnimates(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		io, _, _, stderr := testTTYIO()
+		app := MustNew("test", WithIO(io))
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			return c.Spinner(func(_ *Spinner) error {
+				time.Sleep(150 * time.Millisecond)
+				return nil
+			}, WithTitle("Slow"), WithSpinnerDelay(20*time.Millisecond))
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+
+		out := stderr.String()
+		assert.Contains(t, out, "✓")
+		assert.Contains(t, out, "Slow")
+		assert.Contains(t, out, "\r", "slow path must animate with carriage returns")
+	})
+}
+
+func TestSpinnerSetTextUpdatesHeader(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		io, _, _, stderr := testTTYIO()
+		app := MustNew("test", WithIO(io))
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			return c.Spinner(func(sp *Spinner) error {
+				sp.SetText("Building")
+				time.Sleep(80 * time.Millisecond)
+				return nil
+			}, WithTitle("Start"), WithSpinnerDelay(10*time.Millisecond))
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		assert.Contains(t, stderr.String(), "Building")
+	})
+}
+
+func TestSpinnerErrorShowsXIcon(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		io, _, _, stderr := testTTYIO()
+		app := MustNew("test", WithIO(io))
+		var got error
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			got = c.Spinner(func(_ *Spinner) error {
+				return errors.New("boom")
+			}, WithTitle("Fail"), WithSpinnerDelay(200*time.Millisecond))
+			return nil
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		require.Error(t, got)
+		assert.Contains(t, stderr.String(), "✗")
+		assert.Contains(t, stderr.String(), "Fail")
+	})
+}
+
+func TestSpinnerDelayOptionZeroStartsImmediately(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		io, _, _, stderr := testTTYIO()
+		app := MustNew("test", WithIO(io))
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			return c.Spinner(func(_ *Spinner) error {
+				time.Sleep(50 * time.Millisecond)
+				return nil
+			}, WithTitle("Now"), WithSpinnerDelay(0))
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		assert.Contains(t, stderr.String(), "\r",
+			"WithSpinnerDelay(0) must start animation immediately")
+	})
+}
+
+func TestSpinnerNegativeDelayRejected(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := testIO()
+	app := MustNew("test", WithIO(io))
+	var got error
+	app.MustCommand("run", WithRun(func(c *Context) error {
+		got = c.Spinner(func(_ *Spinner) error { return nil },
+			WithSpinnerDelay(-1))
+		return nil
+	}))
+	require.NoError(t, Run(t, app, []string{"run"}))
+	require.Error(t, got)
+	assert.Contains(t, got.Error(), "WithSpinnerDelay")
+}
+
+// failWriter always returns err from Write.
+type failWriter struct{ err error }
+
+func (w failWriter) Write([]byte) (int, error) { return 0, w.err }
+
+// failOnceWriter fails the first Write, then succeeds.
+type failOnceWriter struct {
+	err  error
+	once bool
+}
+
+func (w *failOnceWriter) Write(p []byte) (int, error) {
+	if !w.once {
+		w.once = true
+		return 0, w.err
+	}
+	return len(p), nil
+}
+
+func TestSpinnerPropagatesLiveWriteError(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		writeErr := errors.New("stderr write failed")
+		ios := NewIO(&bytes.Buffer{}, &bytes.Buffer{}, failWriter{err: writeErr})
+		ios.SetStderrTTY(true)
+
+		app := MustNew("test", WithIO(ios))
+		var got error
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			got = c.Spinner(func(_ *Spinner) error { return nil },
+				WithTitle("Write"), WithSpinnerDelay(0))
+			return nil
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		assert.ErrorIs(t, got, writeErr)
+	})
+}
+
+func TestSpinnerLiveWriteErrorPreservedWhenFinalWriteSucceeds(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		writeErr := errors.New("live frame failed")
+		ios := NewIO(&bytes.Buffer{}, &bytes.Buffer{}, &failOnceWriter{err: writeErr})
+		ios.SetStderrTTY(true)
+
+		app := MustNew("test", WithIO(ios))
+		var got error
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			got = c.Spinner(func(_ *Spinner) error { return nil },
+				WithTitle("Write"), WithSpinnerDelay(0))
+			return nil
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		assert.ErrorIs(t, got, writeErr,
+			"live write error must surface even when the final line succeeds")
+	})
+}
+
+func TestSpinnerFnErrorPreferredOverWriteError(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		writeErr := errors.New("stderr write failed")
+		fnErr := errors.New("work failed")
+		ios := NewIO(&bytes.Buffer{}, &bytes.Buffer{}, failWriter{err: writeErr})
+		ios.SetStderrTTY(true)
+
+		app := MustNew("test", WithIO(ios))
+		var got error
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			got = c.Spinner(func(_ *Spinner) error { return fnErr },
+				WithTitle("Write"), WithSpinnerDelay(0))
+			return nil
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		assert.ErrorIs(t, got, fnErr)
+		assert.NotErrorIs(t, got, writeErr)
+	})
+}
+
+func TestSpinnerContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		io, _, _, _ := testTTYIO()
+		ctx, cancel := context.WithCancel(t.Context())
+		app := MustNew("test", WithIO(io))
+		var got error
+		app.MustCommand("run", WithRun(func(c *Context) error {
+			c.SetContext(ctx)
+			got = c.Spinner(func(_ *Spinner) error {
+				cancel()
+				time.Sleep(30 * time.Millisecond)
+				return nil
+			}, WithTitle("Cancel"), WithSpinnerDelay(0))
+			return nil
+		}))
+		require.NoError(t, Run(t, app, []string{"run"}))
+		assert.ErrorIs(t, got, context.Canceled)
+	})
 }
