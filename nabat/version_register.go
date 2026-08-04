@@ -20,22 +20,10 @@ import (
 	"nabat.dev/theme"
 )
 
-// registerVersion wires Nabat's built-in version feature onto the root command.
-// It is called from [New] after [App.registerHelp] and before user-defined root
-// flags are registered on Cobra. The behavior is driven entirely by the
-// version field on [config]; see version_options.go for the public option
-// surface and version.go for the build-info resolver and renderer.
-//
-// Steps:
-//  1. If WithVersion was not passed, leave the root untouched.
-//  2. Resolve build info, falling back to [runtime/debug.ReadBuildInfo] for any
-//     unset commit/date.
-//  3. If a version subcommand name is set, register it on root via the
-//     standard newCommand pipeline.
-//  4. If a version flag name is set, append a hidden boolean flag to the root
-//     spec (the standard root-flag-registration loop in [New] picks it up).
-//  5. Register a global pre-run hook that prints the version and short-circuits
-//     when the flag is true.
+// registerVersion wires built-in version onto the root from versionConfig
+// (see version_options.go). Called from [New] after [App.registerHelp].
+// When [WithVersion] was passed, it resolves build info, registers the
+// optional subcommand and hidden flag, and installs a pre-run short-circuit.
 func (a *App) registerVersion() error {
 	vc := a.cfg.version
 	if vc == nil {

@@ -72,7 +72,7 @@ type rawPromptKnobs struct {
 // rawStyle is the JSON form of one entry in the tokens map.
 //
 // Boolean modifier fields are pointers so the loader can distinguish
-// "explicitly set to false" from "unset (inherit)" — the latter matters
+// "explicitly set to false" from "unset (inherit)"; the latter matters
 // when a spec layers on top of a $token reference.
 //
 // Color fields are [rawColorRef] to accept the hex literal | $primitive |

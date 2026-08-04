@@ -61,10 +61,8 @@ func WithLevel(l slog.Level) Option {
 	})
 }
 
-// WithHandler installs a custom slog handler. The extension wraps it in a
-// dynamic-level adjuster so verbose/level flag changes still apply.
-//
-// Returns an error if h is nil.
+// WithHandler installs a custom slog handler. The extension wraps it so
+// verbose and level flag changes still apply. Returns an error if h is nil.
 func WithHandler(h slog.Handler) Option {
 	return optionFn(func(c *config) error {
 		if h == nil {
@@ -75,10 +73,9 @@ func WithHandler(h slog.Handler) Option {
 	})
 }
 
-// WithVerboseFlag wires a bool flag whose presence flips the level to
-// [slog.LevelDebug] for the invocation. The flag must be declared by the user
-// via [nabat.WithFlag] (typically on the root command with
-// [nabat.WithPersistent]).
+// WithVerboseFlag wires a bool flag that sets [slog.LevelDebug] when
+// explicitly set to true. The flag must be declared via [nabat.WithFlag]
+// (typically on the root with [nabat.WithPersistent]).
 func WithVerboseFlag(name string) Option {
 	return optionFn(func(c *config) error {
 		c.verboseFlag = name
@@ -86,9 +83,8 @@ func WithVerboseFlag(name string) Option {
 	})
 }
 
-// WithLevelFlag wires a string flag (debug|info|warn|error) parsed to set the
-// per-invocation level. The flag must be declared by the user via
-// [nabat.WithFlag].
+// WithLevelFlag wires a string flag (debug|info|warn|error) that sets the
+// per-invocation level. The flag must be declared via [nabat.WithFlag].
 func WithLevelFlag(name string) Option {
 	return optionFn(func(c *config) error {
 		c.levelFlag = name
@@ -130,7 +126,11 @@ func (e *extension) Init(app nabat.AppSurface) error {
 		slogLogger = slog.New(&levelGate{level: lv, inner: cfg.handler})
 
 		if err := app.OnPreRun(func(c *nabat.Context) error {
-			lv.Set(resolveLevel(c, cfg))
+			level, levelErr := resolveLevel(c, cfg)
+			if levelErr != nil {
+				return levelErr
+			}
+			lv.Set(level)
 			return nil
 		}); err != nil {
 			return err
@@ -146,7 +146,11 @@ func (e *extension) Init(app nabat.AppSurface) error {
 		slogLogger = slog.New(h)
 
 		if err := app.OnPreRun(func(c *nabat.Context) error {
-			lv.Set(resolveLevel(c, cfg))
+			level, levelErr := resolveLevel(c, cfg)
+			if levelErr != nil {
+				return levelErr
+			}
+			lv.Set(level)
 			return nil
 		}); err != nil {
 			return err
@@ -160,7 +164,7 @@ func (e *extension) Init(app nabat.AppSurface) error {
 	return nil
 }
 
-func resolveLevel(c *nabat.Context, cfg config) slog.Level {
+func resolveLevel(c *nabat.Context, cfg config) (slog.Level, error) {
 	level := cfg.level
 	if cfg.verboseFlag != "" {
 		if v, err := c.BindAs[bool](cfg.verboseFlag); err == nil && c.Explicit(cfg.verboseFlag) && v {
@@ -169,15 +173,18 @@ func resolveLevel(c *nabat.Context, cfg config) slog.Level {
 	}
 	if cfg.levelFlag != "" {
 		if s, err := c.BindAs[string](cfg.levelFlag); err == nil && c.Explicit(cfg.levelFlag) && s != "" {
-			if parsed, parseErr := ParseLevel(s); parseErr == nil {
-				level = parsed
+			parsed, parseErr := ParseLevel(s)
+			if parseErr != nil {
+				return 0, fmt.Errorf("nabat/logging: invalid %s value %q: %w", cfg.levelFlag, s, parseErr)
 			}
+			level = parsed
 		}
 	}
-	return level
+	return level, nil
 }
 
-// New returns a [nabat.Extension] that installs an opinionated logger.
+// New returns a [nabat.Extension] that installs a styled logger.
+// A nil option returns an error wrapping [ErrNilOption].
 func New(opts ...Option) (nabat.Extension, error) {
 	cfg := config{level: slog.LevelInfo}
 	for i, opt := range opts {

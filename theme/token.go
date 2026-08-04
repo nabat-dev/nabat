@@ -15,45 +15,32 @@
 package theme
 
 // Token names a semantic style slot in a [ResolvedTheme]. Tokens are
-// dotted lowercase strings (for example "status.success", "text.primary")
-// that identify the role a style plays rather than its appearance. The
-// constants in this file are Nabat's well-known set; third-party themes
-// and extensions may define and consume additional tokens — token names
-// are an open set, not an enum.
-//
-// The named string type catches arbitrary-string misuse at [Builder.Set]
-// and [ResolvedTheme.Style] call sites without preventing dynamic lookup
-// by callers that already hold a string (for example a user manifest or
-// a flag value).
+// dotted lowercase strings (for example "status.success") that identify
+// role, not appearance. The constants below are Nabat's well-known set;
+// token names are an open set, not an enum.
 type Token string
 
-// Well-known semantic tokens used by the Nabat core consumers.
+// Well-known semantic tokens used by Nabat core consumers.
 const (
-	// StatusSuccess marks affirmative output: completed deploys,
-	// "ok" badges, the leading symbol on Context.Success.
+	// StatusSuccess marks affirmative output (Context.Success, ok badges).
 	StatusSuccess Token = "status.success"
 
-	// StatusWarning marks warnings: degraded operation, deprecated APIs,
-	// the leading symbol on Context.Warn.
+	// StatusWarning marks warnings (Context.Warn, degraded operation).
 	StatusWarning Token = "status.warning"
 
-	// StatusError marks failure output: rejected commands, the leading
-	// symbol on Context.Error, the "error:" prefix on uncaught errors.
+	// StatusError marks failure output (Context.Error, rejected commands).
 	StatusError Token = "status.error"
 
-	// StatusInfo marks neutral status narrative: retrying, connecting,
-	// the leading symbol on Context.Info, version-line text.
+	// StatusInfo marks neutral status narrative (Context.Info, retries).
 	StatusInfo Token = "status.info"
 
-	// TextPrimary styles primary body text, table cell values, and
-	// list/tree item text.
+	// TextPrimary styles primary body text and table/list/tree item text.
 	TextPrimary Token = "text.primary"
 
 	// TextSecondary styles descriptive text and prose.
 	TextSecondary Token = "text.secondary"
 
-	// TextTitle styles help titles, table headers, and other prominent
-	// section titles.
+	// TextTitle styles help titles, table headers, and section titles.
 	TextTitle Token = "text.title"
 
 	// TextLink styles hyperlinks.
@@ -62,41 +49,38 @@ const (
 	// AccentPrimary styles labels and key chrome accents.
 	AccentPrimary Token = "accent.primary"
 
-	// TextMuted styles de-emphasized chrome such as table borders,
-	// list enumerators, and tree connectors.
+	// TextMuted styles de-emphasized chrome (borders, enumerators).
 	TextMuted Token = "text.muted"
 
 	// CodeSurface styles code block backgrounds.
 	CodeSurface Token = "code.surface"
 
-	// TableBorder styles the characters drawn between table cells.
+	// TableBorder styles characters drawn between table cells.
 	TableBorder Token = "table.border"
 
-	// TableHeader styles the cells in a table's header row.
+	// TableHeader styles cells in a table header row.
 	TableHeader Token = "table.header"
 
-	// TableCell styles the cells in a table's data rows.
+	// TableCell styles cells in a table data row.
 	TableCell Token = "table.cell"
 
 	// ListItem styles list item text.
 	ListItem Token = "list.item"
 
-	// ListEnumerator styles list enumerator markers (•, -, 1., …).
+	// ListEnumerator styles list enumerator markers.
 	ListEnumerator Token = "list.enumerator"
 
 	// TreeItem styles tree item text.
 	TreeItem Token = "tree.item"
 
-	// TreeEnumerator styles tree enumerator markers (├──, └──, ...).
+	// TreeEnumerator styles tree enumerator markers.
 	TreeEnumerator Token = "tree.enumerator"
 
-	// SpinnerActive styles the animated spinner icon shown in a live [Spinner]
-	// display. Themes that do not set this token fall through to [StatusInfo]
-	// via [DefaultAliases].
+	// SpinnerActive styles the live [Spinner] icon. Unset themes fall
+	// through to [StatusInfo] via [DefaultAliases].
 	SpinnerActive Token = "spinner.active"
 
-	// StatusActive styles the animated spinner icon shown next to active rows
-	// in a live [Status] display. Themes that do not set this token fall
-	// through to [StatusInfo] via [DefaultAliases].
+	// StatusActive styles the spinner icon on active [Status] rows.
+	// Unset themes fall through to [StatusInfo] via [DefaultAliases].
 	StatusActive Token = "status.active"
 )

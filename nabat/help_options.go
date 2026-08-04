@@ -16,30 +16,9 @@ package nabat
 
 import "fmt"
 
-// Help is a built-in core feature with a two-axis design:
-//
-//   - The persistent `--help` (`-h`) flag is on by default for every [App]
-//     constructed with [New] or [MustNew]. This matches the GNU/POSIX
-//     convention that `--help` should always be available, and parallels
-//     other CLI frameworks (cobra, urfave/cli, clap). Configure or disable
-//     the flag with [WithHelpFlagName], [WithHelpShorthand],
-//     [WithoutHelpFlag], and [WithoutHelpShorthand].
-//
-//   - The `help <subcmd>` subcommand is opt-in via [WithHelpCommand],
-//     mirroring how [WithVersion] opts into the version feature. Omit
-//     [WithHelpCommand] and no subcommand is installed; pass it to install
-//     the Nabat-themed `help` subcommand and customize its name with
-//     [WithHelpCommandName].
-//
-// Use [WithoutHelp] to disable the entire feature (no flag, no subcommand,
-// no custom renderer); Cobra's stock defaults take over.
-//
-// Defaults: flag "--help", shorthand "-h", subcommand absent. A bare
-// `nabat.MustNew("foo")` accepts `foo --help` and `foo -h` but not
-// `foo help <subcmd>` until [WithHelpCommand] is added.
-
 // HelpCommandOption configures the opt-in `help <subcmd>` surface inside
-// [WithHelpCommand].
+// [WithHelpCommand]. The persistent `--help`/`-h` flag is on by default;
+// the subcommand is opt-in. Use [WithoutHelp] to disable the entire feature.
 type HelpCommandOption func(*helpCommandConfig) error
 
 type helpConfig struct {
@@ -78,23 +57,13 @@ func (hc *helpConfig) validate() error {
 	return nil
 }
 
-// WithHelpCommand installs the `help <subcmd>` subcommand with Nabat's
-// themed renderer. The subcommand is off by default; pass this option to
-// turn it on, mirroring how [WithVersion] opts into the version feature.
-//
-// Pass [HelpCommandOption] values such as [WithHelpCommandName] to
-// customize the subcommand. A nil option in the slice returns
-// [ErrNilOption].
+// WithHelpCommand installs the `help <subcmd>` subcommand with Nabat's themed
+// renderer. Pass [HelpCommandOption] values such as [WithHelpCommandName] to
+// customize. A nil option returns [ErrNilOption].
 //
 // Example:
 //
-//	MustNew("ctl", WithHelpCommand())
-//	// `ctl help run` prints help for the `run` subcommand.
-//
-//	MustNew("ctl", WithHelpCommand(
-//	    WithHelpCommandName("aide"),
-//	))
-//	// `ctl aide run` prints help for the `run` subcommand.
+//	MustNew("ctl", WithHelpCommand(WithHelpCommandName("aide")))
 func WithHelpCommand(opts ...HelpCommandOption) Option {
 	return optionFn(func(c *config) error {
 		cmdCfg := &helpCommandConfig{name: "help"}
@@ -114,13 +83,6 @@ func WithHelpCommand(opts ...HelpCommandOption) Option {
 
 // WithHelpCommandName overrides the help subcommand name (default "help").
 // Use inside [WithHelpCommand]; empty strings return [ErrInvalidOption].
-//
-// Example:
-//
-//	app := MustNew("myctl", WithHelpCommand(
-//	    WithHelpCommandName("aide"),
-//	))
-//	// `myctl aide deploy` prints help for the deploy subcommand.
 func WithHelpCommandName(name string) HelpCommandOption {
 	return func(cc *helpCommandConfig) error {
 		if name == "" {
@@ -131,22 +93,13 @@ func WithHelpCommandName(name string) HelpCommandOption {
 	}
 }
 
-// WithHelpFlagName overrides the help flag name (default "help"). Combine
-// with [WithHelpShorthand] to also change the shorthand.
-//
-// Empty string returns [ErrInvalidOption]; use [WithoutHelpFlag] to disable
-// the flag instead.
-//
-// When the flag name is not "help", a hidden alias --help is also registered
-// to preempt Cobra's auto-injected --help and avoid two help flags coexisting.
+// WithHelpFlagName overrides the help flag name (default "help"). Empty
+// string returns [ErrInvalidOption]; use [WithoutHelpFlag] to disable. When
+// the name is not "help", a hidden `--help` alias preempts Cobra's auto flag.
 //
 // Example:
 //
-//	app := MustNew("myctl",
-//	    WithHelpFlagName("info"),
-//	    WithHelpShorthand('i'),
-//	)
-//	// `myctl --info` and `myctl -i` show help.
+//	MustNew("myctl", WithHelpFlagName("info"), WithHelpShorthand('i'))
 func WithHelpFlagName(name string) Option {
 	return optionFn(func(c *config) error {
 		if name == "" {
@@ -159,11 +112,8 @@ func WithHelpFlagName(name string) Option {
 }
 
 // WithoutHelpFlag disables the persistent --help flag. The opt-in help
-// subcommand (when enabled via [WithHelpCommand]) keeps working.
-//
-// Cobra's auto-injected --help is suppressed by registering a hidden no-op
-// flag in its place; if the user explicitly wants Cobra's default behavior,
-// use [WithoutHelp] instead.
+// subcommand (via [WithHelpCommand]) keeps working. Use [WithoutHelp] for
+// Cobra's stock defaults.
 func WithoutHelpFlag() Option {
 	return optionFn(func(c *config) error {
 		c.help.flag.name = ""
@@ -195,14 +145,9 @@ func WithoutHelpShorthand() Option {
 	})
 }
 
-// WithoutHelp disables the built-in help feature entirely: no Nabat custom
-// renderer is installed, no opt-in `help` subcommand, no persistent
-// `--help` flag. Cobra's defaults take over (auto-injected --help with the
-// stock template).
-//
-// Mixing WithoutHelp with any other With(out)Help* option returns
-// [ErrInvalidOption]. The check runs in [New] after all options have been
-// applied so order does not matter.
+// WithoutHelp disables Nabat help entirely (no custom renderer, flag, or
+// subcommand); Cobra defaults take over. Mixing with other With(out)Help*
+// options returns [ErrInvalidOption].
 func WithoutHelp() Option {
 	return optionFn(func(c *config) error {
 		c.help.disabled = true

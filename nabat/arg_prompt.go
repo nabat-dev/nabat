@@ -15,23 +15,12 @@
 package nabat
 
 // WithPrompt attaches an interactive prompt to a declarative arg. T is inferred
-// from the arg's bind type, so no explicit type annotation is needed:
+// from the arg bind type. Pass "" for description to omit the subtitle.
+// Kind-specific sub-options are constrained by T so misuse fails at compile time.
 //
-//	nabat.WithArg("name", "", nabat.WithPrompt("Your name", "",
-//	    nabat.WithHint("alice"),
-//	    nabat.WithDefault("anon"),
-//	))
+// Example:
 //
-//	nabat.WithArg("force", false, nabat.WithPrompt("Force overwrite?", "",
-//	    nabat.WithAffirmative("Yes"),
-//	    nabat.WithNegative("Cancel"),
-//	))
-//
-// The description argument is rendered as a subtitle beneath the title; pass
-// "" to omit it.
-//
-// Kind-specific sub-options are constrained by the phantom T so misuse like
-// [WithEditor] on a bool prompt fails at compile time.
+//	WithArg("name", "", WithPrompt("Your name", "", WithDefault("anon")))
 func WithPrompt[T any](title, description string, opts ...FieldOption[T]) ArgOption {
 	return argOptionFn(func(s *argSpec) error {
 		s.prompt.text = title

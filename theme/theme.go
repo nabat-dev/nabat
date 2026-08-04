@@ -28,254 +28,156 @@ import (
 	chromastyles "github.com/alecthomas/chroma/v2/styles"
 )
 
-// Variant is a theme's intended luminance / TTY context — the
-// background brightness or render mode the author designed for. It is
-// the slot a future "--theme-variant" override flag and runtime
-// diagnostics will read (e.g. "the active theme targets dark
-// backgrounds; your terminal looks light") to choose between light
-// and dark palette flavors of a brand theme.
+// Variant is a theme's intended luminance or TTY context (dark, light,
+// or notty). Runtime diagnostics and a future "--theme-variant" override
+// read this slot.
 //
-// The zero Variant ([VariantUnset]) means "the theme did not declare
-// a target variant"; consumers should treat it as compatible with
-// every Capabilities snapshot.
+// The zero value ([VariantUnset]) means the theme did not declare a
+// target; consumers should treat it as compatible with every
+// [Capabilities] snapshot.
 type Variant string
 
-// Variant constants enumerate the values a manifest's "variant" field
-// (and a programmatic [Theme.Default] / map key) accepts. They match
-// the strings the manifest schema validates against, so a manifest's
-// "variant" field round-trips through this type without a translation
-// step.
+// Variant constants match the manifest "variant" field and
+// [Theme.Default] / [Theme.Variants] keys.
 const (
-	// VariantUnset is the zero value: the theme did not declare a
-	// target variant. Consumers should not gate behavior on this.
+	// VariantUnset is the zero value: no target variant declared.
 	VariantUnset Variant = ""
 
-	// VariantDark indicates the theme was designed for dark
-	// terminals. Use it when the palette assumes a dark background.
+	// VariantDark indicates a palette designed for dark terminals.
 	VariantDark Variant = "dark"
 
-	// VariantLight indicates the theme was designed for light
-	// terminals. Use it when the palette assumes a light background.
+	// VariantLight indicates a palette designed for light terminals.
 	VariantLight Variant = "light"
 
-	// VariantNoTTY indicates the theme was designed for non-TTY
-	// output (logs, CI artifacts). Use it when the palette assumes
-	// no ANSI styling at all.
+	// VariantNoTTY indicates a palette designed for non-TTY output.
 	VariantNoTTY Variant = "notty"
 )
 
-// Theme is declarative data describing a complete CLI styling. It
-// carries one or more [Palette] entries (one per declared variant),
-// the variant the theme defaults to when [Capabilities] do not pin a
-// clear pick, and a small set of cross-variant defaults (list
-// enumerator, table border).
-//
-// Themes resolve once per [App] at construction time via [Theme.Resolve],
-// which picks a variant, applies framework defaults for any
-// per-palette field the author left zero, and returns an immutable
-// [ResolvedTheme]. The choice to model themes as data (rather than
-// the closure type they used to be) is what lets the catalog return
-// inspectable values, lets [Override] build derived themes without
-// re-running setup, and keeps the manifest loader a pure data
-// pipeline.
-//
-// Theme is safe to copy by value; however the copy shares the Variants map
-// with the original — mutating `copy.Variants[k] = p` affects the source.
-// To derive a modified theme with an independent Variants map, use
-// [Theme.Clone]. To tweak a single token in a built-in theme without
-// constructing a full copy, use [nabat.WithThemeOverride].
-//
-// Theme implements [Resolver]; pass it anywhere a Resolver is expected.
+// Theme is declarative CLI styling: [Palette] entries per [Variant],
+// a default variant, and cross-variant defaults. [Theme.Resolve] returns
+// an immutable [ResolvedTheme]. Safe to copy by value, but the copy shares
+// the Variants map; use [Theme.Clone] or [nabat.WithThemeOverride] to
+// tweak. Implements [Resolver].
 type Theme struct {
-	// Name identifies the theme in error messages, the catalog
-	// registry key, and [ResolvedTheme.Name]. Required for built-in
-	// themes; programmatic themes may leave it empty.
+	// Name identifies the theme in errors, the catalog key, and
+	// [ResolvedTheme.Name]. Built-ins require it; programmatic themes
+	// may leave it empty.
 	Name string
 
-	// Variants maps each declared [Variant] to its [Palette]. Most
-	// themes ship a single entry; multi-variant themes carry one
-	// palette per dark/light/notty mode and let [Theme.Resolve] pick
-	// at runtime.
-	//
-	// An empty Variants produces a zero [ResolvedTheme] from
-	// [Theme.Resolve] — every Style call returns the zero
-	// [lipgloss.Style], which lipgloss renders as the terminal
-	// default.
+	// Variants maps each declared [Variant] to its [Palette].
+	// An empty map yields a zero [ResolvedTheme] from [Theme.Resolve]
+	// (every Style call returns the zero [lipgloss.Style]).
 	Variants map[Variant]Palette
 
-	// Default is the variant [Theme.Resolve] picks when the runtime
-	// [Capabilities] do not point at one of the declared variants.
-	// For single-variant themes it must equal the only key in
-	// Variants; the zero [VariantUnset] is treated as the lone key
-	// when exactly one variant exists.
+	// Default is the variant [Theme.Resolve] picks when [Capabilities]
+	// do not match a declared variant. For a single-variant theme the
+	// lone key wins even when Default is [VariantUnset].
 	Default Variant
 
-	// ListEnum is the default enumerator for [Context.List] output.
-	// Themes that want bullets, dashes, or numbers without a
-	// per-call override set it once here; the framework picks
-	// [list.Bullet] when this is nil.
+	// ListEnum is the default enumerator for list output. Nil resolves
+	// to [list.Bullet].
 	ListEnum list.Enumerator
 
-	// TableBorder is the default border drawn by [Context.Table]
-	// when no per-call override is supplied. The zero
+	// TableBorder is the default table border. The zero
 	// [lipgloss.Border] resolves to [lipgloss.NormalBorder].
 	TableBorder lipgloss.Border
 
-	// PromptKnobs are theme-wide prompt settings applied to token-derived
-	// and palette prompt styles.
+	// PromptKnobs are theme-wide prompt settings applied to
+	// token-derived and palette prompt styles.
 	PromptKnobs PromptKnobs
 }
 
-// Palette is the per-variant style data a [Theme] carries. Each
-// declared variant maps to one Palette; [Theme.Resolve] picks one and
-// fills any nil/empty cascade slot with framework defaults.
+// Palette is the per-variant style data a [Theme] carries.
+// [Theme.Resolve] picks one palette and fills nil or empty cascade
+// slots with framework defaults.
 //
-// The chroma and glamour cascades are intentionally three-way (owned
-// value > registered name > capability default) because both upstream
-// libraries support either form, and themes commonly mix them — for
-// example "use the registered Dracula chroma style but ship a custom
-// glamour config". The cascade is folded into a single value at
-// [Theme.Resolve] time so [ResolvedTheme] consumers see only the
-// resolved result, not the source path.
+// Chroma and glamour use a three-way cascade (owned value, registered
+// name, capability default) folded into one value at resolve time.
 type Palette struct {
-	// Tokens is the per-token style map. Lookups in
-	// [ResolvedTheme.Style] hit this map first; tokens the
-	// palette omits fall through to the alias chain (per-palette
-	// [Aliases] overlaid on [DefaultAliases]) before defaulting to
-	// the zero [lipgloss.Style] (terminal default).
+	// Tokens is the per-token style map. Missing tokens fall through
+	// the alias chain ([Aliases] over [DefaultAliases]) before the
+	// zero [lipgloss.Style].
 	Tokens map[Token]lipgloss.Style
 
-	// Aliases overrides entries in [DefaultAliases] for this
-	// palette. A non-empty mapping replaces the framework default;
-	// an explicit empty Token value (Aliases[X] = "") disables the
-	// framework default for that key without substituting another.
-	//
-	// Typical use: the manifest's "aliases" field, where a theme
-	// author wants list bullets to follow text.secondary instead of
-	// text.muted. Most themes leave this nil and inherit the
-	// framework defaults wholesale.
+	// Aliases overrides [DefaultAliases] for this palette. A non-empty
+	// mapping replaces the default; Aliases[X] = "" disables the
+	// default for that key without substituting another.
 	Aliases map[Token]Token
 
-	// Chroma is an owned [*chroma.Style] for syntax highlighting.
-	// When non-nil it wins over [Palette.ChromaName]; when both are
-	// zero the palette's variant determines the framework default
-	// via [ChromaPreset].
+	// Chroma is an owned [*chroma.Style]. Non-nil wins over
+	// [Palette.ChromaName]; when both are zero, [ChromaFromTokens]
+	// supplies the default.
 	Chroma *chroma.Style
 
-	// ChromaName is the upstream chroma style name (e.g. "monokai",
-	// "dracula"). Used when [Palette.Chroma] is nil. Unknown names
-	// fall through to chroma's own default at render time.
+	// ChromaName is the upstream chroma style name used when
+	// [Palette.Chroma] is nil. Unknown names fall through to chroma's
+	// own default at render time.
 	ChromaName string
 
-	// Glamour is an owned [*ansi.StyleConfig] for markdown
-	// rendering. When non-nil it wins over both
+	// Glamour is an owned [*ansi.StyleConfig]. Non-nil wins over
 	// [Palette.GlamourName] and [Palette.GlamourFor].
 	Glamour *ansi.StyleConfig
 
-	// GlamourName is the upstream glamour preset name (e.g. "dark",
-	// "light", "notty"). Used when both Glamour and GlamourFor are
-	// nil; unknown names fall through to glamour's own default.
+	// GlamourName is the upstream glamour preset name used when
+	// Glamour and GlamourFor are nil. Unknown names fall through to
+	// glamour's own default.
 	GlamourName string
 
-	// GlamourFor is the capability-aware factory used by themes
-	// (typically the manifest loader's inline "glamourStyle" path)
-	// that need to evaluate glamour against the current
-	// [Capabilities]. Called by [Theme.Resolve] when both Glamour
-	// and GlamourName are zero. The function may return an error
-	// that surfaces from [Theme.Resolve].
+	// GlamourFor is a capability-aware factory called by [Theme.Resolve]
+	// when Glamour and GlamourName are zero. Errors surface from
+	// [Theme.ResolveErr] (and are discarded by [Theme.Resolve]).
 	GlamourFor func(Capabilities) (*ansi.StyleConfig, error)
 
-	// Prompt is the Nabat-native style block for interactive
-	// prompts. The framework converts it to a [huh.Theme] at
-	// [Theme.Resolve] time. Zero (the empty Prompt) means the
-	// catalog falls back to [PromptFromTokens] using
-	// [Palette.Tokens]; setting any field opts into the closed
-	// Nabat-native surface and forgoes the framework default.
-	//
-	// [Palette.Huh] still wins over [Prompt] when set — that's
-	// the escape hatch for themes that need huh's full surface.
+	// Prompt is the Nabat-native prompt style block, converted to a
+	// [huh.Theme] at resolve time. Zero falls back to
+	// [PromptFromTokens]. [Palette.Huh] wins over Prompt when set.
 	Prompt Prompt
 
-	// Huh is the [huh.Theme] used by interactive prompts. When
-	// non-nil it wins outright over [Prompt] and the
-	// [PromptFromTokens] fallback. The escape hatch is for themes
-	// that need huh's full per-state surface (separate focused /
-	// blurred styling, custom textInput layout, etc.) — the
-	// closed Nabat-native [Prompt] cannot express those.
+	// Huh is the [huh.Theme] for interactive prompts. Non-nil wins
+	// over [Prompt] and [PromptFromTokens]. Use it when the closed
+	// [Prompt] surface is not enough.
 	Huh huh.Theme
 }
 
-// Resolver is the escape hatch for themes whose palette choice depends
-// on runtime [Capabilities] in a way that cannot be expressed as
-// "one Palette per Variant". Most themes (every built-in, every
-// straight programmatic theme) declare one Palette per variant and
-// let [Theme.Resolve] pick. The rare cases — for example a theme that
-// switches palettes when the color profile is ANSI16 vs TrueColor —
-// implement Resolver directly and bypass [Theme] entirely.
+// Resolver resolves a theme against runtime [Capabilities]. Most themes
+// declare one [Palette] per [Variant] and use [Theme.Resolve]. Implement
+// Resolver directly only when palette choice cannot be expressed that way.
 //
-// [Theme] implements Resolver via its [Theme.Resolve] method, so a
-// Theme value can be passed anywhere a Resolver is expected.
+// [Theme] implements Resolver.
 type Resolver interface {
 	Resolve(Capabilities) ResolvedTheme
 }
 
 // Clone returns a shallow copy of t with an independent Variants map.
-// Palette values inside the map are shared (not deep-copied); the new
-// map itself is separate, so assigning to Clone().Variants[k] does not
-// affect the original theme.
+// Palette values inside the map are shared; assigning to
+// Clone().Variants[k] does not affect the original.
 func (t Theme) Clone() Theme {
 	out := t
 	out.Variants = maps.Clone(t.Variants)
 	return out
 }
 
-// Resolve picks a [Variant] for the supplied [Capabilities], applies
-// framework defaults to any zero field on the chosen [Palette], and
-// returns an immutable [ResolvedTheme]. The result is safe to share
-// across goroutines.
+// Resolve picks a [Variant] for [Capabilities], fills zero [Palette]
+// fields with framework defaults, and returns an immutable
+// [ResolvedTheme] safe to share across goroutines.
 //
-// Variant selection:
-//
-//   - If the theme declares exactly one variant, that one is used and
-//     [Theme.Default] is ignored.
-//   - Otherwise, [Theme.Default] picks; the zero default plus
-//     multiple variants returns the zero ResolvedTheme rather than a
-//     guess (multi-variant resolution sharpens in a later phase).
-//
-// Cascade defaults applied to the chosen Palette:
-//
-//   - [Palette.Huh] nil  -> derived from [Palette.Tokens] via [PromptFromTokens].
-//   - [Palette.Glamour] nil + [Palette.GlamourFor] non-nil -> evaluate
-//     against Capabilities; an error is logged via the returned
-//     ResolvedTheme's name in the error chain (see error return).
-//   - [Palette.Glamour] nil + [Palette.GlamourFor] nil + [Palette.GlamourName]
-//     empty -> [GlamourFromTokens] with [GlamourPreset] base.
-//   - [Palette.Chroma] nil + [Palette.ChromaName] empty ->
-//     [ChromaFromTokens].
-//
-// Cross-palette defaults applied:
-//
-//   - [Theme.ListEnum] nil -> [list.Bullet].
-//   - [Theme.TableBorder] zero -> [lipgloss.NormalBorder].
-//
-// Errors:
-//
-//   - The inline-glamour [Palette.GlamourFor] callback may fail; the
-//     error is wrapped with the theme name and returned. Resolve
-//     still produces a usable ResolvedTheme in that case (the
-//     glamour slot stays empty, falling through to glamour's own
-//     defaults at render time) so consumers can surface the error
-//     diagnostically without losing the rest of the styling.
+// One declared variant wins ([Theme.Default] ignored); otherwise Default
+// picks. A zero default with multiple variants yields the zero
+// ResolvedTheme. Resolve discards callback and alias-cycle errors; use
+// [Theme.ResolveErr] for those. On [Palette.GlamourFor] failure the
+// glamour slot stays empty.
 func (t Theme) Resolve(c Capabilities) ResolvedTheme {
 	rt, _ := t.resolveWithErr(c) //nolint:errcheck // Resolve intentionally drops the error; ResolveErr is the channel for it.
 	return rt
 }
 
-// ResolveErr behaves like [Theme.Resolve] but also returns the error
-// from any per-Palette callback (today only [Palette.GlamourFor]).
-// Construction paths that want to surface those failures (App.finalize,
-// the catalog loader's own validations) should use this; consumers
-// that just need a styling pick the error-eating Resolve.
+// ResolveErr behaves like [Theme.Resolve] but also returns errors from
+// per-Palette callbacks (today [Palette.GlamourFor]) and alias-cycle
+// validation.
+//
+// On failure ResolveErr still returns a usable [ResolvedTheme] (failed
+// glamour or alias slots stay empty) plus a non-nil error. Callers must
+// check the error for diagnostics and may still apply the returned theme.
 func (t Theme) ResolveErr(c Capabilities) (ResolvedTheme, error) {
 	return t.resolveWithErr(c)
 }
@@ -291,7 +193,7 @@ func (t Theme) resolveWithErr(c Capabilities) (ResolvedTheme, error) {
 	// Fold it into a single value here so the resolved theme doesn't
 	// expose three accessors per integration. The result is what
 	// consumers like Context.highlight pass directly to the chroma
-	// formatter — no global registry lookup at access time.
+	// formatter; no global registry lookup at access time.
 	chromaStyle := palette.Chroma
 	if chromaStyle == nil {
 		if palette.ChromaName != "" {
@@ -310,7 +212,7 @@ func (t Theme) resolveWithErr(c Capabilities) (ResolvedTheme, error) {
 	// Behavior on GlamourFor error: short-circuit. The author
 	// explicitly opted into inline glamour by setting GlamourFor;
 	// silently falling through to a name preset would mask the
-	// failure. Return the error and leave the slot empty — consumers
+	// failure. Return the error and leave the slot empty; consumers
 	// fall through to glamour's own defaults at render time, but
 	// the diagnostic surfaces.
 	glamourStyle := palette.Glamour
@@ -384,22 +286,10 @@ func (t Theme) resolveWithErr(c Capabilities) (ResolvedTheme, error) {
 	}, resolveErr
 }
 
-// pickVariant picks the variant [Theme.Resolve] should apply. The
-// rule is, in order:
-//
-//  1. Single-variant themes: return the lone key (regardless of
-//     [Theme.Default]).
-//  2. Non-interactive output: prefer [VariantNoTTY] when declared.
-//  3. Dark terminal: prefer [VariantDark] when declared.
-//  4. Light terminal: prefer [VariantLight] when declared.
-//  5. Fall back to [Theme.Default] when no capability-matched
-//     variant exists.
-//
-// The capability-driven pick is what lets a single multi-variant
-// manifest (say "dracula" with both dark and light palettes) flip
-// automatically based on the terminal's detected background — no
-// `nabat.WithTheme("dracula-light")` needed when the user sits in a
-// light terminal.
+// pickVariant selects the variant [Theme.Resolve] applies, in order:
+// the lone key when only one variant exists; [VariantNoTTY] when
+// non-interactive; [VariantDark] or [VariantLight] from
+// [Capabilities.Dark]; else [Theme.Default].
 func (t Theme) pickVariant(c Capabilities) Variant {
 	if len(t.Variants) == 1 {
 		for v := range t.Variants {
@@ -423,15 +313,9 @@ func (t Theme) pickVariant(c Capabilities) Variant {
 	return t.Default
 }
 
-// Validate returns any structural problems with the theme. The catalog
-// uses it to surface broken built-in themes at registry load; user
-// code rarely needs it directly.
-//
-// Errors:
-//
-//   - Default references a variant not declared in [Theme.Variants].
-//   - [Theme.Variants] is empty AND [Theme.Default] is not unset
-//     (an empty theme is valid; mismatched defaults are not).
+// Validate reports structural problems with the theme.
+// It fails when [Theme.Default] names a missing variant, or Default is set
+// with an empty [Theme.Variants]. Empty themes without Default are valid.
 func (t Theme) Validate() error {
 	if len(t.Variants) == 0 {
 		if t.Default != VariantUnset {

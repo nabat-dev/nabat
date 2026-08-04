@@ -21,14 +21,10 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// styleResolver turns rawStyle entries into [lipgloss.Style] values. It
-// memoizes resolved tokens so repeat lookups of the same $token reference
-// reuse the cache, and tracks an in-flight set so cycles surface as
-// errors instead of stack overflows.
-//
-// The resolver is one-shot per manifest: the loader constructs one,
-// resolves every token in the tokens map, then discards it. Reusing a
-// resolver across manifests would crosslink their primitive maps.
+// styleResolver turns rawStyle entries into [lipgloss.Style] values.
+// It memoizes tokens and tracks an in-flight set so cycles error instead
+// of overflowing the stack. One-shot per manifest; do not reuse across
+// manifests (primitive maps would crosslink).
 type styleResolver struct {
 	primitives map[string]string
 	rawTokens  map[string]rawStyle
@@ -36,11 +32,8 @@ type styleResolver struct {
 	visiting   map[string]bool
 }
 
-// newStyleResolver returns a resolver bound to the primitive and token
-// maps from a single rawTheme. The caller is expected to call
-// [styleResolver.resolveToken] for every token in the manifest so that
-// any errors (unknown primitive, unknown $token target, cycle) surface
-// at registry init rather than at render time.
+// newStyleResolver returns a resolver bound to one manifest's primitive
+// and token maps.
 func newStyleResolver(primitives map[string]string, rawTokens map[string]rawStyle) *styleResolver {
 	return &styleResolver{
 		primitives: primitives,
@@ -50,12 +43,9 @@ func newStyleResolver(primitives map[string]string, rawTokens map[string]rawStyl
 	}
 }
 
-// resolveToken returns the [lipgloss.Style] for token name, building it
-// (and any tokens it references) on demand. The result is memoized.
-//
-// Errors:
-//   - unknown token name (no entry in the tokens map);
-//   - cycle detected (token transitively references itself).
+// resolveToken returns the [lipgloss.Style] for token name, building
+// referenced tokens on demand. Results are memoized. It fails on an unknown
+// token name or a cycle via $token.
 func (r *styleResolver) resolveToken(name string) (lipgloss.Style, error) {
 	if s, ok := r.cache[name]; ok {
 		return s, nil
@@ -78,20 +68,10 @@ func (r *styleResolver) resolveToken(name string) (lipgloss.Style, error) {
 	return style, nil
 }
 
-// resolveSpec turns one rawStyle into a [lipgloss.Style] without recording
-// it in the cache. It is the building block resolveToken composes; the
-// chroma, glamour, and huh parsers reuse it directly for their leaves.
-//
-// Resolution order (each step layers on the previous result):
-//  1. Seed the style from $primitive (as foreground) or $token (full
-//     inheritance). The schema's "not: [$primitive, $token]" rule means
-//     at most one is set.
-//  2. Apply explicit fg/bg/border colors (each accepting a hex literal,
-//     a $primitive reference, or a $token reference).
-//  3. Apply the border preset, if any, to the lipgloss border style.
-//  4. Apply boolean modifiers (bold/italic/...). Pointers let the spec
-//     unset modifiers it inherited from $token.
-//  5. Apply literal text via SetString (used by huh prefix slots).
+// resolveSpec turns one rawStyle into a [lipgloss.Style] without caching.
+// Order: seed from $primitive or $token; apply fg/bg/border colors;
+// apply border preset; apply boolean modifiers (pointers can unset
+// inherited ones); apply SetString literal text.
 func (r *styleResolver) resolveSpec(spec rawStyle) (lipgloss.Style, error) {
 	var s lipgloss.Style
 	switch {

@@ -112,7 +112,7 @@ func validateDefaultType(kind, name string, vt valueType, cfg fieldConfig) error
 		return fmt.Errorf("%w for %s %q", ErrInvalidValueType, kind, name)
 	}
 	if err := a.checkDefault(cfg.defaultValue); err != nil {
-		return fmt.Errorf("nabat: %s %q %s", kind, name, err.Error())
+		return fmt.Errorf("nabat: %s %q: %w", kind, name, err)
 	}
 	// Choice membership is enforced for non-required select/multi-select defaults.
 	switch vt.kind {

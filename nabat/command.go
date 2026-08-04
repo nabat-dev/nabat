@@ -23,19 +23,13 @@ import (
 )
 
 // RunFunc is the handler invoked after positional args and flags are resolved
-// on a [Context].
-//
-// Return nil to indicate success. Return a non-nil error to report failure; the
-// error is propagated to the caller of [App.Run] (or [Run] in tests).
-//
-// RunFunc implementations must not retain the [Context] or use it after the
-// function returns.
+// on a [Context]. Return nil on success; a non-nil error propagates to the
+// caller of [App.Run] (or [Run] in tests). Do not retain or use the [Context]
+// after the function returns.
 type RunFunc func(*Context) error
 
 // Command is a Nabat view of one node in the command tree backed by Cobra.
-//
-// Use [App.Command] and [Command.Command] to create instances. The wrapped Cobra
-// command is used internally for parsing and execution.
+// Create instances with [App.Command] and [Command.Command].
 type Command struct {
 	app   *App
 	cobra *cobra.Command
@@ -89,37 +83,18 @@ type commandSpec struct {
 	commandInitHooks []func(*Command) error
 }
 
-// CommandOption configures a subcommand when passed to [App.Command] or
-// [Command.Command]. Every value returned by a `With*` constructor in this
-// package satisfies CommandOption.
-//
-// CommandOption is the wider of nabat's two command-option types:
-//
-//   - [RootOption] is the strict subset of CommandOption that is also valid
-//     on the root command. Every RootOption also satisfies [Option] and so
-//     can be passed directly to [New] to configure the root.
-//   - CommandOption (this type) accepts every option, including those that
-//     have no meaningful effect on the root command (such as [WithGroup],
-//     [WithHidden], [WithAliases], [WithTypoHints]).
-//
-// Use the `With*` functions in this package to build a list of options.
-//
-// Passing a nil CommandOption to [App.Command] or [Command.Command] returns
-// an inline error (or panics, in [App.MustCommand] / [Command.MustCommand]).
+// CommandOption configures a subcommand for [App.Command] or [Command.Command].
+// [RootOption] is also valid on the root (and as [Option] for [New]);
+// [WithGroup], [WithHidden], [WithAliases], and [WithTypoHints] are
+// CommandOption-only. A nil option returns an error (or panics in Must*).
 type CommandOption interface {
 	applyToCommand(*commandSpec) error
 }
 
-// RootOption is the strict subset of [CommandOption] that is also valid on
-// the root command. RootOption values are passed directly to [nabat.New] to
-// configure the root command (every RootOption also satisfies [Option]); they
-// can also be used inside [WithCommand], [App.Command], and [Command.Command]
-// because every RootOption is a [CommandOption].
-//
-// Constructors that return only [CommandOption] (because cobra ignores them
-// on the root command — [WithGroup], [WithHidden], [WithAliases],
-// [WithTypoHints]) are build errors when passed directly to [New], but
-// remain valid inside [WithCommand] for nested subcommands.
+// RootOption is the subset of [CommandOption] also valid on the root and as
+// [Option] for [New]. Constructors that return only [CommandOption]
+// ([WithGroup], [WithHidden], [WithAliases], [WithTypoHints]) error when
+// passed to [New].
 type RootOption interface {
 	CommandOption
 	Option
@@ -136,8 +111,8 @@ func (o cmdOpt) applyToCommand(c *commandSpec) error { return o.fn(c) }
 
 // rootOpt is the internal adapter for options that are valid on every command
 // (including the root). It satisfies [CommandOption], [RootOption], and
-// [Option] — the last so the same value can be passed directly to [New] to
-// configure the root command's spec without an intermediate wrapper.
+// [Option], so the same value can be passed directly to [New] to configure
+// the root command's spec without an intermediate wrapper.
 type rootOpt struct {
 	fn func(*commandSpec) error
 }
@@ -146,18 +121,9 @@ func (o rootOpt) applyToCommand(c *commandSpec) error { return o.fn(c) }
 func (rootOpt) rootCommandOnly()                      {}
 func (o rootOpt) applyToConfig(c *config) error       { return o.fn(c.rootSpec) }
 
-// commandReg is a pending subcommand registration produced by [WithCommand].
-// It satisfies all three option interfaces:
-//
-//   - [Option] (via [commandReg.applyToConfig]): a top-level WithCommand
-//     passed to [New] appends to the App's pending list.
-//   - [RootOption] (via [commandReg.rootCommandOnly]): WithCommand can be
-//     used wherever a RootOption is accepted.
-//   - [CommandOption] (via [commandReg.applyToCommand]): a nested WithCommand
-//     inside another WithCommand appends as a child of that command.
-//
-// The same value declares a top-level subcommand at the New site or a nested
-// subcommand inside another WithCommand — one name, one nesting primitive.
+// commandReg is a pending subcommand registration from [WithCommand]. It
+// satisfies [Option], [RootOption], and [CommandOption] so the same value
+// registers under root ([New]) or as a nested child ([WithCommand]).
 type commandReg struct {
 	name string
 	opts []CommandOption
@@ -175,33 +141,16 @@ func (r *commandReg) applyToCommand(spec *commandSpec) error {
 
 func (*commandReg) rootCommandOnly() {}
 
-// WithCommand declares a subcommand. The same value works at every nesting
-// level:
+// WithCommand declares a subcommand for [New] (or nested under another
+// [WithCommand]). Registration errors join the [*ConfigErrors] from [New].
+// For per-call errors or dynamic registration, use [App.Command].
 //
-//   - Passed to [nabat.New], it registers a top-level subcommand under root.
-//   - Nested inside another [WithCommand], it registers a child under that
-//     command.
+// Example:
 //
-// Errors aggregate into the [*ConfigErrors] returned by [New], alongside
-// option errors and validation errors. For inline (per-call) error handling
-// or runtime/dynamic registration, use [App.Command] / [Command.Command]
-// instead.
-//
-// Errors:
-//   - registration errors (nil option, empty name, name collisions,
-//     flag-registration failures) are surfaced by [New] in the returned
-//     [*ConfigErrors]. See [App.Command] for the full per-error list.
-//
-// Example (declarative tree):
-//
-//	app, err := New("myctl",
-//	    WithDescription("My CLI"),
+//	New("myctl",
 //	    WithCommand("cluster",
-//	        WithDescription("Cluster management"),
-//	        WithCommand("scale", WithRun(scaleHandler)),
-//	        WithCommand("status", WithRun(statusHandler)),
+//	        WithCommand("scale", WithRun(scale)),
 //	    ),
-//	    WithCommand("deploy", WithRun(deployHandler)),
 //	)
 func WithCommand(name string, opts ...CommandOption) RootOption {
 	return &commandReg{name: name, opts: opts}
@@ -225,12 +174,9 @@ func WithLongDescription(desc string) RootOption {
 	}}
 }
 
-// WithAliases sets command aliases used by the parent command's lookup and
-// suggestion logic (see [cobra.Command.Aliases]).
-//
-// Returns a [CommandOption], not a [RootOption]; passing this directly to
-// [New] is a build error because the binary's invocation name is set by the
-// OS executable name, so cobra cannot honor aliases on the root command.
+// WithAliases sets command aliases for parent lookup and suggestions (see
+// [cobra.Command.Aliases]). Returns a [CommandOption], not a [RootOption];
+// passing it to [New] is a build error.
 func WithAliases(aliases ...string) CommandOption {
 	return cmdOpt{fn: func(c *commandSpec) error {
 		c.aliases = append([]string(nil), aliases...)
@@ -238,12 +184,8 @@ func WithAliases(aliases ...string) CommandOption {
 	}}
 }
 
-// WithGroup sets a command group identifier used to visually group commands in
-// help output.
-//
-// Returns a [CommandOption], not a [RootOption]; passing this directly to
-// [New] is a build error because the root command has no parent listing to
-// be grouped under.
+// WithGroup sets a help-listing group identifier. Returns a [CommandOption],
+// not a [RootOption]; passing it to [New] is a build error.
 func WithGroup(name string) CommandOption {
 	return cmdOpt{fn: func(c *commandSpec) error {
 		c.group = name
@@ -253,7 +195,7 @@ func WithGroup(name string) CommandOption {
 
 // hiddenOpt is the internal carrier for [WithHidden]. It satisfies both
 // [CommandOption] and [FlagOption] so a single value works on subcommands
-// AND named flags. Positional args are intentionally excluded — hiding a
+// AND named flags. Positional args are intentionally excluded: hiding a
 // declared positional is meaningless because the slot still consumes the
 // next CLI token regardless of help visibility.
 type hiddenOpt struct{}
@@ -261,29 +203,14 @@ type hiddenOpt struct{}
 func (hiddenOpt) applyToCommand(c *commandSpec) error { c.hidden = true; return nil }
 func (hiddenOpt) applyToFlag(s *flagSpec) error       { s.field.hidden = true; return nil }
 
-// WithHidden hides a subcommand or a flag from help listings. The
-// command/flag remains invokable; it simply does not appear in --help.
+// WithHidden hides a subcommand or flag from help listings while keeping it
+// invokable. The return type satisfies both [CommandOption] and [FlagOption].
+// It is not a [RootOption]; passing it to [New] is a build error.
 //
-// Returns an interface that satisfies [CommandOption] AND [FlagOption], so
-// one helper covers both call sites:
+// Example:
 //
-//	app.MustCommand("internal", WithHidden(), WithRun(func(c *Context) error {
-//	    return nil
-//	}))
-//
+//	app.MustCommand("internal", WithHidden(), WithRun(handler))
 //	WithFlag("secret", false, WithHidden())
-//
-// For conditional hiding, use a plain Go `if` instead of a dedicated helper:
-//
-//	opts := []CommandOption{WithRun(handler)}
-//	if cfg.hidden {
-//	    opts = append(opts, WithHidden())
-//	}
-//	app.MustCommand("internal", opts...)
-//
-// Returns the union interface (not a [RootOption]); passing this directly to
-// [New] is a build error because the root command has no parent listing to
-// be hidden from.
 func WithHidden() interface {
 	CommandOption
 	FlagOption
@@ -291,13 +218,9 @@ func WithHidden() interface {
 	return hiddenOpt{}
 }
 
-// WithTypoHints sets suggested spellings when the user mistypes the subcommand
-// name
-// (see [cobra.Command.SuggestFor]).
-//
-// Returns a [CommandOption], not a [RootOption]; passing this directly to
-// [New] is a build error because suggestion lookup iterates a command's
-// siblings and the root command has none.
+// WithTypoHints sets suggested spellings for mistyped subcommand names (see
+// [cobra.Command.SuggestFor]). Returns a [CommandOption], not a [RootOption];
+// passing it to [New] is a build error.
 func WithTypoHints(aliases ...string) CommandOption {
 	return cmdOpt{fn: func(c *commandSpec) error {
 		c.typoHints = append(c.typoHints, aliases...)
@@ -306,18 +229,12 @@ func WithTypoHints(aliases ...string) CommandOption {
 }
 
 // WithAnnotation sets a key/value entry on [cobra.Command.Annotations]. Repeat
-// calls
-// accumulate; the same key set later overwrites earlier values.
+// calls accumulate; the same key set later overwrites earlier values.
+// key must be non-empty.
 //
 // Example:
 //
-//	app.MustCommand("pods",
-//	    WithAnnotation("kubectl.kubernetes.io/default_container", "app"),
-//	    WithRun(func(c *Context) error { return nil }),
-//	)
-//
-// Errors:
-//   - "nabat: WithAnnotation key cannot be empty": key is "".
+//	WithAnnotation("kubectl.kubernetes.io/default_container", "app")
 func WithAnnotation(key, value string) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if key == "" {
@@ -329,22 +246,15 @@ func WithAnnotation(key, value string) RootOption {
 }
 
 // WithPositionalCompleter overrides automatic positional shell completions.
-// Use this option only with a non-nil [CompletionFunc]; automatic
-// completions are derived from a single [WithSelectArg] or [WithArg] with
-// [WithStringSuggestions] when this option is omitted.
-//
-// "Completer" names the per-positional callback to keep it distinct from
-// [WithCompletion], the App-level switch that installs the `completion`
-// subcommand.
+// fn must be non-nil. Distinct from [WithCompletion] (the `completion`
+// subcommand). When omitted, completions come from a single [WithSelectArg]
+// or [WithArg] with [WithStringSuggestions].
 //
 // Example:
 //
-//	app.MustCommand("env",
-//	    WithPositionalCompleter(func(args []string, toComplete string) ([]string, CompletionDirective) {
-//	        return []string{"staging", "prod"}, CompletionNoFileComp
-//	    }),
-//	    WithRun(func(c *Context) error { return nil }),
-//	)
+//	WithPositionalCompleter(func(args []string, toComplete string) ([]string, CompletionDirective) {
+//	    return []string{"staging", "prod"}, CompletionNoFileComp
+//	})
 func WithPositionalCompleter(fn CompletionFunc) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if fn == nil {
@@ -355,20 +265,14 @@ func WithPositionalCompleter(fn CompletionFunc) RootOption {
 	}}
 }
 
-// WithRun sets the command handler.
+// WithRun sets the command handler. fn must be non-nil.
 //
 // Example:
 //
-//	app.MustCommand("deploy",
-//	    WithFlag("env", "staging"),
-//	    WithRun(func(c *Context) error {
-//	        c.Success("done", "env", args.Env) // after c.Bind(&args)
-//	        return nil
-//	    }),
-//	)
-//
-// Errors:
-//   - "nabat: command run cannot be nil": fn is nil.
+//	WithRun(func(c *Context) error {
+//	    c.Success("done")
+//	    return nil
+//	})
 func WithRun(fn RunFunc) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if fn == nil {
@@ -379,10 +283,8 @@ func WithRun(fn RunFunc) RootOption {
 	}}
 }
 
-// WithExample sets the example block shown in the command's help output.
-// Write it as plain shell text: comment lines starting with # are dimmed,
-// the program name on each line is highlighted, flags (--flag, -f) are
-// accented, quoted strings and shell operators are styled accordingly.
+// WithExample sets the example block shown in help. Write plain shell text;
+// comments (#), the program name, flags, and quotes are styled in help.
 //
 //	WithExample(`
 //	# Deploy to production:
@@ -395,19 +297,9 @@ func WithExample(md string) RootOption {
 	}}
 }
 
-// WithValidation adds a cross-field validation function that runs after all
-// positional args and flags are resolved but before the command handler.
-// Multiple calls accumulate; all validations must pass.
-//
-//	WithValidation(func(c *Context) error {
-//	    if format == "json" && !c.Explicit("output") { // use c.BindAs[string]("format"), etc.
-//	        return errors.New("--output is required when --format=json")
-//	    }
-//	    return nil
-//	})
-//
-// Errors:
-//   - "nabat: validation function cannot be nil": fn is nil.
+// WithValidation adds a cross-field check after args and flags resolve and
+// before the handler. Multiple calls accumulate; all must pass. fn must be
+// non-nil.
 func WithValidation(fn func(*Context) error) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if fn == nil {
@@ -418,13 +310,9 @@ func WithValidation(fn func(*Context) error) RootOption {
 	}}
 }
 
-// WithPreRun adds a hook that runs after arg resolution but before the command
-// handler. Multiple calls accumulate in order. A non-nil error aborts the run.
-//
-// Use for auth checks, telemetry setup, or any pre-flight work.
-//
-// Errors:
-//   - "nabat: pre-run function cannot be nil": fn is nil.
+// WithPreRun adds a hook after arg resolution and before the handler.
+// Multiple calls accumulate in order; a non-nil error aborts the run.
+// fn must be non-nil.
 func WithPreRun(fn func(*Context) error) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if fn == nil {
@@ -435,29 +323,14 @@ func WithPreRun(fn func(*Context) error) RootOption {
 	}}
 }
 
-// WithPassthrough declares that this command accepts arguments after --.
-// label is shown in the usage line as [-- label] (e.g. "command..." →
-// [-- command...]).
-// The optional desc is shown as a row under the Arguments section in help output.
-// Access the passthrough args in the handler via [Context.Passthrough]; use
-// [Context.HasPassthrough] to tell whether "--" appeared even with no tokens
-// after it.
+// WithPassthrough declares arguments after `--`. label appears in usage as
+// `[-- label]` and must be non-empty; optional desc appears under Arguments
+// in help. Read tokens with [Context.Passthrough]; detect `--` with
+// [Context.HasPassthrough].
 //
 // Example:
 //
-//	app.MustCommand("exec",
-//	    WithArg("service", "", WithRequired()),
-//	    WithPassthrough("command [args...]", "command to run once the service is ready"),
-//	    WithRun(func(c *Context) error {
-//	        if c.HasPassthrough() {
-//	            return exec(c.Passthrough())
-//	        }
-//	        return nil
-//	    }),
-//	)
-//
-// Errors:
-//   - "nabat: WithPassthrough label cannot be empty": label is "".
+//	WithPassthrough("command [args...]", "command to run once ready")
 func WithPassthrough(label string, desc ...string) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if label == "" {
@@ -472,14 +345,9 @@ func WithPassthrough(label string, desc ...string) RootOption {
 	}}
 }
 
-// WithPostRun adds a hook that runs after the command handler returns, regardless
-// of whether it succeeded. Multiple calls accumulate in order.
-// Post-run errors are returned only when the command handler itself succeeded.
-//
-// Use for cleanup, audit logging, or telemetry flushing.
-//
-// Errors:
-//   - "nabat: post-run function cannot be nil": fn is nil.
+// WithPostRun adds a hook after the handler returns, success or failure.
+// Multiple calls accumulate in order. Post-run errors are returned only when
+// the handler itself succeeded. fn must be non-nil.
 func WithPostRun(fn func(*Context) error) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if fn == nil {
@@ -577,11 +445,9 @@ func normalizeDefaultValue[T any](v T) any {
 	}
 }
 
-// WithArg defines one positional argument with adaptive resolution.
-// The type argument T is inferred from defaultVal and selects the stored value
-// kind (for example int vs uint vs int64 vs [time.Duration]).
-// Use typed zero values such as uint(0) or int64(0) rather than untyped 0 when
-// the field must not be an int.
+// WithArg defines one positional argument with adaptive resolution. T is
+// inferred from defaultVal. Use typed zeros (uint(0), int64(0)) when an int
+// default is wrong.
 func WithArg[T ArgValue](name string, defaultVal T, opts ...ArgOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyArgOptions(opts)
@@ -598,20 +464,14 @@ func WithArg[T ArgValue](name string, defaultVal T, opts ...ArgOption) RootOptio
 	}}
 }
 
-// WithSelectArg defines one positional select argument with adaptive resolution.
-// defaultVal must be one of choices (or empty when [WithRequired] is set).
-// Add [WithPrompt] to enable interactive prompting when the terminal is a TTY.
-// Handlers read the value with [Context.Bind] or [BindAs].
+// WithSelectArg defines one positional select argument. defaultVal must be in
+// choices (or empty with [WithRequired]). Add [WithPrompt] for TTY prompting.
+// Read the value with [Context.Bind] or [BindAs].
 //
 // Example:
 //
-//	app.MustCommand("deploy",
-//	    WithSelectArg("env", "", []string{"staging", "production"},
-//	        WithRequired(),
-//	        WithPrompt("Target environment", ""),
-//	    ),
-//	    WithRun(handler),
-//	)
+//	WithSelectArg("env", "", []string{"staging", "production"},
+//	    WithRequired(), WithPrompt("Target environment", ""))
 func WithSelectArg(name, defaultVal string, choices []string, opts ...ArgOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyArgOptions(opts)
@@ -624,12 +484,9 @@ func WithSelectArg(name, defaultVal string, choices []string, opts ...ArgOption)
 	}}
 }
 
-// WithMultiSelectArg defines one positional multi-select argument with adaptive
-// resolution.
-// defaultVal are the pre-selected items; each must be in choices (or pass nil
-// when [WithRequired] is set).
-// Add [WithPrompt] to enable interactive prompting when the terminal is a TTY.
-// Handlers read the value with [Context.Bind] or [BindAs].
+// WithMultiSelectArg defines one positional multi-select argument. defaultVal
+// items must be in choices (or nil with [WithRequired]). Add [WithPrompt] for
+// TTY prompting. Read the value with [Context.Bind] or [BindAs].
 func WithMultiSelectArg(name string, defaultVal, choices []string, opts ...ArgOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyArgOptions(opts)
@@ -642,12 +499,9 @@ func WithMultiSelectArg(name string, defaultVal, choices []string, opts ...ArgOp
 	}}
 }
 
-// WithFlag defines a named flag on a command.
-// The type argument T is inferred from defaultVal and selects the flag's value
-// kind.
-// Use typed zero values when an int default is wrong; choose kinds such as
-// [uint] or [time.Duration] explicitly. For count flags (for example -vvv), pass
-// an int default (typically 0) and add [WithCount].
+// WithFlag defines a named flag. T is inferred from defaultVal. Use typed zeros
+// when an int default is wrong. For count flags (-vvv), pass an int default
+// (typically 0) and [WithCount].
 func WithFlag[T FlagValue](name string, defaultVal T, opts ...FlagOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyFlagOptions(opts)
@@ -672,10 +526,8 @@ func WithFlag[T FlagValue](name string, defaultVal T, opts ...FlagOption) RootOp
 	}}
 }
 
-// WithSelectFlag defines a named flag whose value must be one of the given
-// choices.
-// defaultVal must be one of choices (or empty string if [WithRequired] is also
-// set).
+// WithSelectFlag defines a named flag whose value must be one of choices.
+// defaultVal must be in choices (or empty with [WithRequired]).
 func WithSelectFlag(name, defaultVal string, choices []string, opts ...FlagOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyFlagOptions(opts)
@@ -688,9 +540,8 @@ func WithSelectFlag(name, defaultVal string, choices []string, opts ...FlagOptio
 	}}
 }
 
-// WithMultiSelectFlag defines a named flag accepting multiple values from choices.
-// defaultVal items must each be one of choices (or empty slice if [WithRequired]
-// is also set).
+// WithMultiSelectFlag defines a named flag accepting multiple values from
+// choices. defaultVal items must be in choices (or empty with [WithRequired]).
 func WithMultiSelectFlag(name string, defaultVal, choices []string, opts ...FlagOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyFlagOptions(opts)
@@ -735,11 +586,8 @@ func (b *rootOptionsOpt) applyToCommand(s *commandSpec) error {
 func (*rootOptionsOpt) rootCommandOnly() {}
 
 // CommandOptions composes multiple [CommandOption] values into one. Options apply
-// in slice order.
-//
-// Errors:
-//   - [ErrNilOption]: a nil entry appears in opts
-//   - errors from individual options
+// in slice order. A nil entry returns [ErrNilOption]; other failures come from
+// the individual options.
 func CommandOptions(opts ...CommandOption) CommandOption {
 	return cmdOpt{fn: func(c *commandSpec) error {
 		for i, o := range opts {
@@ -755,17 +603,15 @@ func CommandOptions(opts ...CommandOption) CommandOption {
 }
 
 // RootOptions composes multiple [RootOption] values into one. Options apply in
-// slice order.
-//
-// Errors:
-//   - [ErrNilOption]: a nil entry appears in opts
-//   - errors from individual options
+// slice order. A nil entry returns [ErrNilOption]; other failures come from
+// the individual options.
 func RootOptions(opts ...RootOption) RootOption {
 	return &rootOptionsOpt{opts: opts}
 }
 
 // WithCommandInit is a [CommandOption] that runs after the command is built,
 // receiving the live [*Command] (for example to call [Command.OnPreRun]).
+// It returns [ErrNilOption] if fn is nil.
 func WithCommandInit(fn func(*Command) error) CommandOption {
 	return commandInitOpt(fn)
 }
@@ -782,7 +628,7 @@ func (f commandInitOpt) applyToCommand(spec *commandSpec) error {
 
 // WithRootInit is like [WithCommandInit] but satisfies [RootOption], so it can be
 // passed directly to [New]. For non-root commands, use [WithCommandInit] inside
-// [WithCommand].
+// [WithCommand]. It returns [ErrNilOption] if fn is nil.
 func WithRootInit(fn func(*Command) error) RootOption {
 	return rootOpt{fn: func(spec *commandSpec) error {
 		if fn == nil {
@@ -824,11 +670,9 @@ func applyCommandOptions(opts []CommandOption) (*commandSpec, error) {
 	return spec, nil
 }
 
-// newCommand registers a child command under parent. Returns the new
-// [*Command] and a non-nil error if registration fails (empty name, invalid
-// option, name collision, flag-registration failure, finalization error). On
-// error, no command is added to parent and the returned [*Command] is nil —
-// callers must handle the error before chaining further registrations.
+// newCommand registers a child command under parent. On error, no command is
+// added and the returned [*Command] is nil (empty name, invalid option, name
+// collision, flag-registration failure, or finalization error).
 func (a *App) newCommand(parent *cobra.Command, name string, opts ...CommandOption) (*Command, error) {
 	if name == "" {
 		return nil, fmt.Errorf("nabat: command name cannot be empty")
@@ -886,27 +730,21 @@ func (a *App) newCommand(parent *cobra.Command, name string, opts ...CommandOpti
 	wrapper := &Command{app: a, cobra: cmd, spec: spec}
 	for i, hook := range spec.commandInitHooks {
 		if hook == nil {
+			a.rollbackCommand(parent, cmd)
 			return nil, fmt.Errorf("%w: command %q: WithCommandInit at index %d is nil", ErrNilOption, name, i)
 		}
 		if hookErr := hook(wrapper); hookErr != nil {
+			a.rollbackCommand(parent, cmd)
 			return nil, fmt.Errorf("nabat: command %q: WithCommandInit: %w", name, hookErr)
 		}
 	}
 	return wrapper, nil
 }
 
-// Command creates a child command under this command. Same error contract as
-// [App.Command]: returns the new command and a non-nil error if registration
-// fails. On error, no child is added and the returned [*Command] is nil.
-//
-// Errors:
-//   - [ErrRegistrationFrozen]: called after [App.Run] / [App.RunArgs]
-//   - [ErrNilOption]: a CommandOption in opts is nil
-//   - "nabat: command name cannot be empty"
-//   - [ErrArgFlagNameCollision]: an arg and a flag share a name
-//   - errors from individual [CommandOption] application (wrapped, joined with
-//     [ErrInvalidOption] when triggered by a nil option-list entry)
-//   - errors from flag registration and command finalization
+// Command creates a child command under this command. On error, no child is
+// added and the returned [*Command] is nil. Same error contract as [App.Command]
+// ([ErrRegistrationFrozen], [ErrNilOption], empty name,
+// [ErrArgFlagNameCollision], and option or finalization failures).
 func (c *Command) Command(name string, opts ...CommandOption) (*Command, error) {
 	if c.app.registrationFrozen.Load() {
 		return nil, ErrRegistrationFrozen
@@ -915,12 +753,8 @@ func (c *Command) Command(name string, opts ...CommandOption) (*Command, error) 
 }
 
 // MustCommand is the panicking variant of [Command.Command], mirroring
-// [App.MustCommand]. Use in main() and test setup where chaining
-// (`cluster.MustCommand("scale").MustCommand("up", ...)`) is more readable
-// than scoped error checks.
-//
-// Panics if [Command.Command] returns an error. See its documentation for
-// the full per-error list.
+// [App.MustCommand]. Prefer it in main() and tests for chaining. Panics if
+// [Command.Command] returns an error.
 func (c *Command) MustCommand(name string, opts ...CommandOption) *Command {
 	child, err := c.Command(name, opts...)
 	if err != nil {
@@ -929,24 +763,20 @@ func (c *Command) MustCommand(name string, opts ...CommandOption) *Command {
 	return child
 }
 
-// UnsafeCobra returns the underlying [*cobra.Command] for operations that
-// Nabat does not abstract (for example C-only Cobra hooks or dynamic
-// registration). Mutating the command tree after construction may bypass
-// Nabat invariants — prefer [Command.Command] / [Command.MustCommand] and the
-// CommandOption family (e.g. [WithRun], [WithArg], [WithFlag]) for standard
-// use.
+// UnsafeCobra returns the underlying [*cobra.Command] for escape-hatch use.
+// Mutating the tree after construction may bypass Nabat invariants; prefer
+// [Command.Command] and CommandOption helpers for standard use.
 //
 // Example:
 //
-//	parent := app.MustCommand("exec", WithRun(func(c *Context) error { return nil }))
 //	raw := parent.UnsafeCobra()
 //	raw.Annotations = map[string]string{"x": "y"}
 func (c *Command) UnsafeCobra() *cobra.Command {
 	return c.cobra
 }
 
-// OnPreRun registers a command-level pre-run hook. It is only valid before
-// [App.Run].
+// OnPreRun registers a command-level pre-run hook. Only valid before [App.Run].
+// It returns [ErrNilOption] if fn is nil and [ErrRegistrationFrozen] after Run.
 func (c *Command) OnPreRun(fn func(*Context) error) error {
 	if fn == nil {
 		return fmt.Errorf("%w: OnPreRun: fn cannot be nil", ErrNilOption)
@@ -958,7 +788,8 @@ func (c *Command) OnPreRun(fn func(*Context) error) error {
 	return nil
 }
 
-// OnValidate registers a validation hook. It is only valid before [App.Run].
+// OnValidate registers a validation hook. Only valid before [App.Run].
+// It returns [ErrNilOption] if fn is nil and [ErrRegistrationFrozen] after Run.
 func (c *Command) OnValidate(fn func(*Context) error) error {
 	if fn == nil {
 		return fmt.Errorf("%w: OnValidate: fn cannot be nil", ErrNilOption)
@@ -970,7 +801,8 @@ func (c *Command) OnValidate(fn func(*Context) error) error {
 	return nil
 }
 
-// OnPostRun registers a post-run hook. It is only valid before [App.Run].
+// OnPostRun registers a post-run hook. Only valid before [App.Run].
+// It returns [ErrNilOption] if fn is nil and [ErrRegistrationFrozen] after Run.
 func (c *Command) OnPostRun(fn func(*Context) error) error {
 	if fn == nil {
 		return fmt.Errorf("%w: OnPostRun: fn cannot be nil", ErrNilOption)

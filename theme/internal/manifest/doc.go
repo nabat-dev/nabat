@@ -12,16 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package manifest holds the parser machinery that turns a Nabat theme
-// manifest (DTCG JSON, schema/v1.json) into a [theme.Theme] closure.
+// Package manifest turns a Nabat theme manifest (DTCG JSON) into a
+// [*Compiled] intermediate value.
 //
-// It exists so the public [nabat.dev/theme] package surface stays
-// minimal: only [Parse] is exported. Every other type or function in
-// this package — the rawTheme intermediate, the styleResolver, the
-// chroma / glamour / huh sub-parsers — is an implementation detail
-// that can change between releases without breaking downstream callers.
-//
-// This package depends on [nabat.dev/theme] for the [theme.Theme] type
-// it returns. Tests live alongside the implementation as
-// `package manifest` so they can keep poking at internal types directly.
+// The [nabat.dev/theme] catalog assembles a Theme from [*Compiled]. This
+// package does not import theme, so the dependency direction stays
+// theme -> manifest.
 package manifest

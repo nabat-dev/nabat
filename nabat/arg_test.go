@@ -460,58 +460,78 @@ func TestRequiredSelectArgFromEnvWithoutCLIPositional(t *testing.T) {
 	assert.Equal(t, "staging", strings.TrimSpace(out.String()))
 }
 
-func TestWithArgIntFromEnv(t *testing.T) {
-	t.Setenv("TEST_COUNT", "99")
-	var got int
-	io, _, _, _ := testIO()
-	app := MustNew("test", WithEnvPrefix("TEST_"), WithIO(io))
-	app.MustCommand("run",
-		WithArg("count", 0, WithEnv("count")),
-		WithRun(func(c *Context) error {
-			v, err := c.BindAs[int]("count")
-			require.NoError(t, err)
-			got = v
-			return nil
-		}),
-	)
-	require.NoError(t, Run(t, app, []string{"run"}))
-	assert.Equal(t, 99, got)
-}
+func TestWithArgNumericFromEnv(t *testing.T) {
+	cases := []struct {
+		name    string
+		envKey  string
+		envVal  string
+		argName string
+		setup   func(*testing.T, *App) func() any
+		want    any
+	}{
+		{
+			name: "int", envKey: "TEST_COUNT", envVal: "99", argName: "count",
+			setup: func(t *testing.T, app *App) func() any {
+				var got int
+				app.MustCommand("run",
+					WithArg("count", 0, WithEnv("count")),
+					WithRun(func(c *Context) error {
+						v, err := c.BindAs[int]("count")
+						require.NoError(t, err)
+						got = v
+						return nil
+					}),
+				)
+				return func() any { return got }
+			},
+			want: 99,
+		},
+		{
+			name: "uint", envKey: "TEST_PORT", envVal: "9000", argName: "port",
+			setup: func(t *testing.T, app *App) func() any {
+				var got uint
+				app.MustCommand("run",
+					WithArg("port", uint(0), WithEnv("port")),
+					WithRun(func(c *Context) error {
+						v, err := c.BindAs[uint]("port")
+						require.NoError(t, err)
+						got = v
+						return nil
+					}),
+				)
+				return func() any { return got }
+			},
+			want: uint(9000),
+		},
+		{
+			name: "int64", envKey: "TEST_SIZE", envVal: "1099511627776", argName: "size",
+			setup: func(t *testing.T, app *App) func() any {
+				var got int64
+				app.MustCommand("run",
+					WithArg("size", int64(0), WithEnv("size")),
+					WithRun(func(c *Context) error {
+						v, err := c.BindAs[int64]("size")
+						require.NoError(t, err)
+						got = v
+						return nil
+					}),
+				)
+				return func() any { return got }
+			},
+			want: int64(1099511627776),
+		},
+	}
 
-func TestWithArgUintFromEnv(t *testing.T) {
-	t.Setenv("TEST_PORT", "9000")
-	var got uint
-	io, _, _, _ := testIO()
-	app := MustNew("test", WithEnvPrefix("TEST_"), WithIO(io))
-	app.MustCommand("run",
-		WithArg("port", uint(0), WithEnv("port")),
-		WithRun(func(c *Context) error {
-			v, err := c.BindAs[uint]("port")
-			require.NoError(t, err)
-			got = v
-			return nil
-		}),
-	)
-	require.NoError(t, Run(t, app, []string{"run"}))
-	assert.Equal(t, uint(9000), got)
-}
-
-func TestWithArgInt64FromEnv(t *testing.T) {
-	t.Setenv("TEST_SIZE", "1099511627776")
-	var got int64
-	io, _, _, _ := testIO()
-	app := MustNew("test", WithEnvPrefix("TEST_"), WithIO(io))
-	app.MustCommand("run",
-		WithArg("size", int64(0), WithEnv("size")),
-		WithRun(func(c *Context) error {
-			v, err := c.BindAs[int64]("size")
-			require.NoError(t, err)
-			got = v
-			return nil
-		}),
-	)
-	require.NoError(t, Run(t, app, []string{"run"}))
-	assert.Equal(t, int64(1099511627776), got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tc.envKey, tc.envVal)
+			io, _, _, _ := testIO()
+			app := MustNew("test", WithEnvPrefix("TEST_"), WithIO(io))
+			got := tc.setup(t, app)
+			require.NoError(t, Run(t, app, []string{"run"}))
+			assert.Equal(t, tc.want, got())
+		})
+	}
 }
 
 func TestWithEnvPrefix(t *testing.T) {

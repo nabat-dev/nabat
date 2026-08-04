@@ -118,6 +118,8 @@ func TestEncodeDispatch(t *testing.T) {
 }
 
 func TestEncodeUnknownFormat(t *testing.T) {
+	t.Parallel()
+
 	io, _, _, _ := testIO()
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("test", WithRun(func(c *Context) error {
@@ -130,6 +132,8 @@ func TestEncodeUnknownFormat(t *testing.T) {
 }
 
 func TestHighlight(t *testing.T) {
+	t.Parallel()
+
 	io, _, stdout, _ := testIO()
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("test", WithRun(func(c *Context) error {
@@ -144,6 +148,8 @@ func TestHighlight(t *testing.T) {
 }
 
 func TestHighlightUnknownLanguage(t *testing.T) {
+	t.Parallel()
+
 	io, _, stdout, _ := testIO()
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("test", WithRun(func(c *Context) error {
@@ -156,6 +162,8 @@ func TestHighlightUnknownLanguage(t *testing.T) {
 }
 
 func TestMinimalThemeNoHighlighting(t *testing.T) {
+	t.Parallel()
+
 	io, _, stdout, _ := testIO()
 	app := MustNew("test",
 		WithTheme(theme.Minimal),
@@ -171,6 +179,8 @@ func TestMinimalThemeNoHighlighting(t *testing.T) {
 }
 
 func TestJSONMarshalError(t *testing.T) {
+	t.Parallel()
+
 	io, _, _, _ := testIO()
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("test", WithRun(func(c *Context) error {

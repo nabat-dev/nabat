@@ -21,51 +21,36 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Prompt is the Nabat-native style block for interactive prompts. It
-// is a closed enum of the slots the framework cares about — closed
-// meaning the schema and the manifest authoring experience never
-// have to track the upstream huh.Styles struct shape.
+// Prompt is the closed Nabat-native style block for interactive prompts.
+// Each field is a [lipgloss.Style] for one slot; the zero style means
+// inherit huh's base styling for that slot.
 //
-// Each field is a [lipgloss.Style] applied to one prompt slot. Zero
-// (the default lipgloss.Style) means "inherit huh's base styling for
-// this slot" — Prompt overlays only the slots the author opted into.
-//
-// Authors who need huh's full surface drop into the programmatic
-// path with a [huh.Theme] of their own, set via [Palette.Huh]
-// directly. That escape hatch wins outright when present, so the
-// closed Prompt surface and the open huh.Theme escape hatch
-// coexist without confusion.
-//
-// Fields that take a literal text payload (the prefix-style markers)
-// use [lipgloss.Style.SetString] to inject the literal in addition
-// to the visual style — `theme.SetString` style call sites work the
-// same way they did in the old huhStyle path.
+// For huh's full surface, set [Palette.Huh] instead; a non-nil Huh wins
+// over Prompt. Prefix markers use [lipgloss.Style.SetString] for their
+// literal text.
 type Prompt struct {
-	// Title is the group / section title shown above prompts.
+	// Title styles the group / section title above prompts.
 	Title lipgloss.Style
 
-	// Description is the explanatory text rendered under each
-	// prompt.
+	// Description styles explanatory text under each prompt.
 	Description lipgloss.Style
 
 	// Cursor styles the text-input cursor.
 	Cursor lipgloss.Style
 
-	// Placeholder styles the text-input placeholder copy.
+	// Placeholder styles the text-input placeholder.
 	Placeholder lipgloss.Style
 
-	// SelectedOption styles the currently-selected list item.
+	// SelectedOption styles the currently selected list item.
 	SelectedOption lipgloss.Style
 
-	// UnselectedOption styles the items not currently selected.
+	// UnselectedOption styles items that are not selected.
 	UnselectedOption lipgloss.Style
 
-	// SelectedPrefix styles the marker drawn next to the selected
-	// item (often "✓ " or "● ").
+	// SelectedPrefix styles the marker next to the selected item.
 	SelectedPrefix lipgloss.Style
 
-	// UnselectedPrefix styles the marker drawn next to non-selected
-	// items (often "  " or "○ ").
+	// UnselectedPrefix styles the marker next to non-selected items.
 	UnselectedPrefix lipgloss.Style
 
 	// Error styles error indicators and messages.
@@ -74,8 +59,7 @@ type Prompt struct {
 	// Help styles the keybind footer text.
 	Help lipgloss.Style
 
-	// Selector styles the active-row indicator and navigation
-	// arrows (next / prev).
+	// Selector styles the active-row indicator and navigation arrows.
 	Selector lipgloss.Style
 
 	// ButtonFocused styles the focused submit / next button.
@@ -84,31 +68,28 @@ type Prompt struct {
 	// ButtonBlurred styles the inactive button.
 	ButtonBlurred lipgloss.Style
 
-	// Border applies as the form / card border. The zero
-	// [lipgloss.Border] leaves huh's base border untouched.
+	// Border is the form / card border. The zero [lipgloss.Border]
+	// leaves huh's base border untouched.
 	Border lipgloss.Border
 
-	// BorderColor sets the focused field left-border foreground. The
+	// BorderColor is the focused field left-border foreground. The
 	// zero value leaves huh's base border color untouched.
 	BorderColor color.Color
 }
 
-// PromptKnobs carries theme-wide prompt settings that are convenient to
-// share across variants.
+// PromptKnobs carries theme-wide prompt settings shared across variants.
 type PromptKnobs struct {
-	// SelectedPrefix is the literal prefix rendered before selected
-	// options (for example "✓ ").
+	// SelectedPrefix is the literal prefix before selected options.
 	SelectedPrefix string
 
-	// UnselectedPrefix is the literal prefix rendered before
-	// unselected options (for example "  ").
+	// UnselectedPrefix is the literal prefix before unselected options.
 	UnselectedPrefix string
 
-	// Border is the form/card border to apply to prompt output. The
-	// zero [lipgloss.Border] leaves the prompt border unchanged.
+	// Border is the form/card border. The zero [lipgloss.Border]
+	// leaves the prompt border unchanged.
 	Border lipgloss.Border
 
-	// BorderColor sets the focused field left-border foreground. The
+	// BorderColor is the focused field left-border foreground. The
 	// zero value leaves the prompt border color unchanged.
 	BorderColor color.Color
 }
@@ -138,19 +119,12 @@ func (k PromptKnobs) Apply(p Prompt) Prompt {
 	return p
 }
 
-// IsZero reports whether p has any field set. The framework uses
-// it to detect "this palette did not declare a prompt" so the
-// catalog can fall back to [PromptFromTokens] without having to
-// special-case nil.
+// IsZero reports whether every field on p is unset. The framework uses
+// it to fall back to [PromptFromTokens] when a palette omits Prompt.
 //
-// A Prompt with only [Border] or [BorderColor] set is non-zero; a
-// Prompt with only the zero lipgloss.Border but every style field
-// set is also non-zero. The zero Prompt — every style empty, the
-// zero border, and no border color — is the only "unset" value.
-//
-// lipgloss.Style is not comparable (it carries slices internally),
-// so the check inspects every field through styleIsZero rather than
-// using `p == Prompt{}`.
+// A Prompt with only [Border] or [BorderColor] set is non-zero. The
+// check inspects fields individually because [lipgloss.Style] is not
+// comparable.
 func (p Prompt) IsZero() bool {
 	return styleIsZero(p.Title) &&
 		styleIsZero(p.Description) &&
@@ -169,12 +143,9 @@ func (p Prompt) IsZero() bool {
 		colorIsUnset(p.BorderColor)
 }
 
-// styleIsZero reports whether s has any visible attribute set. The
-// check looks at fg, bg, the boolean modifiers, and the literal
-// payload — everything overlayStyle considers when deciding whether
-// to overlay onto a base style. A style with only "internal" state
-// (a frame size, a width, etc.) is treated as zero too because the
-// Prompt overlay path never reads those fields.
+// styleIsZero reports whether s has any overlay-relevant attribute set
+// (fg, bg, modifiers, literal payload). Frame/width-only styles count
+// as zero because Prompt overlays never read those fields.
 func styleIsZero(s lipgloss.Style) bool {
 	if !isNoColor(s.GetForeground()) {
 		return false
@@ -192,22 +163,15 @@ func styleIsZero(s lipgloss.Style) bool {
 	return true
 }
 
-// Huh returns a [huh.Theme] derived from this Prompt. The theme
-// starts from [huh.ThemeBase] and overlays the supplied fields onto
-// the slots huh exposes. Zero-style fields inherit huh's base
-// styling.
+// Huh returns a [huh.Theme] derived from this Prompt, starting from
+// [huh.ThemeBase] and overlaying set fields. Zero-style fields inherit
+// the base.
 //
-// The mapping mirrors the curated set in [PromptFromTokens] — the
-// Focused fields users see most (titles, errors, selection
-// indicators, prefixes, text input), the Group surface, and the
-// Help footer. The Blurred mirror reuses the focused style for
-// stable cross-state appearance; authors who want different blurred
-// styling drop into [Palette.Huh] directly.
-//
-// Border applies to Focused.Base and Focused.Card when non-zero.
-// BorderColor applies to the focused left border when set. Blurred
-// fields always use a hidden border so the focused left border acts
-// as the focus indicator.
+// Blurred styling reuses Focused for a stable cross-state look; authors
+// who need separate blurred styles set [Palette.Huh] directly. Border
+// and BorderColor apply to Focused.Base and Focused.Card when set;
+// Blurred fields always use a hidden border so the focused left border
+// acts as the focus indicator.
 func (p Prompt) Huh() huh.Theme {
 	return huh.ThemeFunc(func(isDark bool) *huh.Styles {
 		s := huh.ThemeBase(isDark)
@@ -275,16 +239,9 @@ func (p Prompt) Huh() huh.Theme {
 	})
 }
 
-// PromptFromTokens derives a [Prompt] from a per-token style map.
-// It is the fallback the catalog applies when a [Palette] declares
-// neither [Palette.Prompt] nor [Palette.Huh], so every theme — even
-// bare-bones programmatic ones that only declare token colors —
-// gets a usable interactive surface for free, themed in the same
-// colors as the rest of the CLI.
-//
-// The mapping is intentionally narrow and stable; new prompt slots
-// added to [Prompt] in the future should map here too so the
-// "tokens are enough" promise keeps holding.
+// PromptFromTokens derives a [Prompt] from a per-token style map. It is
+// the fallback when a [Palette] declares neither [Palette.Prompt] nor
+// [Palette.Huh].
 func PromptFromTokens(tokens map[Token]lipgloss.Style) Prompt {
 	return Prompt{
 		Title:            tokens[TextTitle],
@@ -304,13 +261,8 @@ func PromptFromTokens(tokens map[Token]lipgloss.Style) Prompt {
 	}
 }
 
-// overlayStyle copies the foreground / background / bold / italic /
-// underline / strikethrough / faint flags from src onto dst when src
-// has them set. Unset fields preserve dst's value, so partial
-// Prompt declarations layer cleanly on top of huh's base styling.
-//
-// This helper is used by [Prompt.Huh] for every slot mapping; it's
-// the one place the "src wins iff src is set" rule lives.
+// overlayStyle copies set attributes from src onto dst. Unset src
+// fields preserve dst so partial Prompt declarations layer on huh base.
 func overlayStyle(dst, src lipgloss.Style) lipgloss.Style {
 	if styleIsZero(src) {
 		return dst

@@ -17,6 +17,7 @@ package nabat
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/lipgloss/v2"
@@ -34,6 +35,10 @@ type statusDoneMsg struct{ err error }
 // statusModel is the Bubble Tea model for [Context.Status]. It manages an
 // optional animated header, column headers, live rows, and truncation when
 // the number of rows exceeds the terminal height.
+//
+// The worker runs in a goroutine owned by [Context.Status]; this model only
+// waits on fnDone and renders. That keeps interrupt paths from abandoning
+// the worker.
 type statusModel struct {
 	spin        spinner.Model
 	handle      *Status
@@ -41,7 +46,8 @@ type statusModel struct {
 	titleStyle  lipgloss.Style
 	activeStyle lipgloss.Style
 	th          theme.ResolvedTheme
-	action      func(*Status) error
+	fnDone      *sync.WaitGroup
+	fnErr       *error
 	err         error
 	done        bool
 	height      int // terminal height from tea.WindowSizeMsg
@@ -49,7 +55,8 @@ type statusModel struct {
 }
 
 // newStatusModel constructs a statusModel. It is called from [Context.Status]
-// after option validation.
+// after option validation. fnDone/fnErr are owned by Status; the model waits
+// on them to deliver [statusDoneMsg] without starting a second worker.
 func newStatusModel(
 	spin spinner.Model,
 	handle *Status,
@@ -57,7 +64,8 @@ func newStatusModel(
 	titleStyle lipgloss.Style,
 	activeStyle lipgloss.Style,
 	th theme.ResolvedTheme,
-	action func(*Status) error,
+	fnDone *sync.WaitGroup,
+	fnErr *error,
 ) statusModel {
 	return statusModel{
 		spin:        spin,
@@ -66,14 +74,22 @@ func newStatusModel(
 		titleStyle:  titleStyle,
 		activeStyle: activeStyle,
 		th:          th,
-		action:      action,
+		fnDone:      fnDone,
+		fnErr:       fnErr,
 	}
 }
 
 func (m statusModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.spin.Tick,
-		func() tea.Msg { return statusDoneMsg{err: m.action(m.handle)} },
+		func() tea.Msg {
+			m.fnDone.Wait()
+			err := error(nil)
+			if m.fnErr != nil {
+				err = *m.fnErr
+			}
+			return statusDoneMsg{err: err}
+		},
 	)
 }
 
@@ -111,7 +127,7 @@ func (m statusModel) View() tea.View {
 		} else {
 			sb.WriteString(m.spin.View())
 		}
-		if t := m.handle.getTitle(); t != "" {
+		if t := sanitizeTTYText(m.handle.getTitle()); t != "" {
 			sb.WriteString(m.titleStyle.Render(t))
 		}
 		sb.WriteString("\n")
@@ -171,7 +187,7 @@ func (m statusModel) View() tea.View {
 			if i < len(widths) {
 				w = widths[i]
 			}
-			rowContent.WriteString(padRight(col, w))
+			rowContent.WriteString(padRight(sanitizeTTYText(col), w))
 			if i < len(cols)-1 {
 				rowContent.WriteString("  ")
 			}

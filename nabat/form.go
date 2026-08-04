@@ -23,12 +23,8 @@ import (
 )
 
 // FormFieldValue is the set of non-select value types accepted by
-// [WithFormField]. Select types use [WithSelectField] or
-// [WithMultiSelectField] instead.
-//
-// String fields use [WithMultiline] or [WithFilePicker] to switch widget mode.
-// The old nabat.Text and nabat.File types have been removed; use plain string
-// with the appropriate mode option.
+// [WithFormField]. Use [WithSelectField] or [WithMultiSelectField] for
+// selects. String fields use [WithMultiline] or [WithFilePicker] for mode.
 type FormFieldValue interface {
 	string | bool | int | int64 | uint | float64 | time.Duration
 }
@@ -187,10 +183,6 @@ func WithFormCancel(label string) FormOption {
 }
 
 // WithFormAccessible enables huh's screen-reader-friendly accessible mode.
-// Recommended pattern: drive from an environment variable:
-//
-//	nabat.WithFormAccessible(), // always on; or:
-//	// conditionally: use c.Form opts builder with os.Getenv("ACCESSIBLE") != ""
 func WithFormAccessible() FormOption {
 	return formOpt(func(fc *formConfig) error {
 		fc.accessible = true
@@ -234,21 +226,12 @@ func WithGroupDescription(s string) GroupOption {
 	})
 }
 
-// WithFormGroup wraps fields and group chrome into a new page within the form.
-// Fields used outside any [WithFormGroup] land in the default first group.
+// WithFormGroup wraps fields and group chrome into a new form page. Fields
+// outside any group land in the default first page.
 //
 // Example:
 //
-//	c.Form(
-//	    nabat.WithFormGroup(
-//	        nabat.WithGroupTitle("Identity"),
-//	        nabat.WithFormField(&name, "Name", ""),
-//	    ),
-//	    nabat.WithFormGroup(
-//	        nabat.WithGroupTitle("Deployment"),
-//	        nabat.WithSelectField(&env, "Environment", "", choices, "staging"),
-//	    ),
-//	)
+//	c.Form(WithFormGroup(WithGroupTitle("Identity"), WithFormField(&name, "Name", "")))
 func WithFormGroup(opts ...GroupOption) FormOption {
 	return formOpt(func(fc *formConfig) error {
 		var fg formGroup
@@ -270,17 +253,11 @@ func WithFormGroup(opts ...GroupOption) FormOption {
 	})
 }
 
-// WithFormField adds a typed field to a form or group. T determines the widget
-// kind:
-//   - string renders a single-line input by default; use [WithMultiline] for
-//     multi-line or [WithFilePicker] for a file browser.
-//   - bool renders a confirm widget.
-//   - Numeric types render a text input with runtime parsing.
-//
-// The description is rendered as a subtitle beneath the field title; pass ""
-// to omit it.
-//
-// Use [WithSelectField] or [WithMultiSelectField] for select-style widgets.
+// WithFormField adds a typed field to a form or group. string is a single-line
+// input by default ([WithMultiline] / [WithFilePicker] change the widget);
+// bool is confirm; numeric types use a text input with parsing. Pass "" for
+// description to omit it. Use [WithSelectField] or [WithMultiSelectField] for
+// selects.
 func WithFormField[T FormFieldValue](
 	target *T, title, description string, opts ...FieldOption[T],
 ) interface {
@@ -529,7 +506,6 @@ func asSelectOptions(opts []MultiSelectOption) []SelectOption {
 }
 
 // buildFormField dispatches to the right Huh widget based on T and mode.
-
 func buildFormField[T FormFieldValue](target *T, pc promptConfig) func() (huh.Field, error) {
 	return func() (huh.Field, error) {
 		var zero T
@@ -767,15 +743,10 @@ func parseFormFieldValue[T FormFieldValue](s string) (T, error) {
 	}
 }
 
-// Form runs a typed form built from [FormOption] values. In interactive mode,
-// Huh widgets are built and presented to the user. In non-interactive mode,
-// every field must have a default (set with [WithDefault]); missing defaults
-// are aggregated into a [*ConfigErrors].
-// Use [Context.UnsafeForm] when the declarative API cannot express the layout.
-//
-// Errors:
-//   - [*ConfigErrors] when option application or fallback walk fails
-//   - errors from the underlying Huh form in interactive mode
+// Form runs a typed form from [FormOption] values. Interactive mode presents
+// Huh widgets; non-interactive mode requires [WithDefault] on every field
+// (missing defaults aggregate into a [*ConfigErrors]). Use [Context.UnsafeForm]
+// when the declarative API cannot express the layout.
 func (c *Context) Form(opts ...FormOption) error {
 	var fc formConfig
 	var errs ConfigErrors
@@ -844,21 +815,20 @@ func (c *Context) Form(opts ...FormOption) error {
 		form = form.WithTimeout(fc.timeout)
 	}
 	c.app.applyHuhTheme(form)
+	form = form.WithInput(c.io.RawIn()).WithOutput(c.io.RawErrOut())
 	return form.Run()
 }
 
 // UnsafeForm runs a Huh form built from raw [huh.Field] values. Use this
 // escape hatch when the typed form API cannot express a specific layout.
-//
-// Errors:
-//   - "nabat: form requires interactive terminal" when not interactive
-//   - errors from the underlying Huh form
+// It fails when the terminal is not interactive, or when the Huh form fails.
 func (c *Context) UnsafeForm(fields ...huh.Field) error {
 	if !c.interactive {
 		return fmt.Errorf("nabat: form requires interactive terminal")
 	}
 	form := huh.NewForm(huh.NewGroup(fields...))
 	c.app.applyHuhTheme(form)
+	form = form.WithInput(c.io.RawIn()).WithOutput(c.io.RawErrOut())
 	return form.Run()
 }
 

@@ -12,18 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package theme defines the open-ended, capability-aware theming primitives
-// used by Nabat and its extensions.
+// Package theme defines capability-aware theming primitives for Nabat
+// and its extensions.
 //
-// A [Theme] is a struct that carries one or more [Palette] entries (one per
-// declared variant), a default variant selector, and cross-variant defaults
-// (list enumerator, table border). [Theme.Resolve] picks a variant based on
-// [Capabilities] and returns an immutable [ResolvedTheme] that consumers
-// query by [Token] or by accessor.
+// A [Theme] carries one or more [Palette] entries, a default variant,
+// and cross-variant defaults. [Theme.Resolve] picks a variant from
+// [Capabilities] and returns an immutable [ResolvedTheme] queried by
+// [Token] or accessor.
 //
-// The package has no dependency on the nabat root package or on
-// [nabat.IOStreams]. Extensions can import it directly to read styles from a
-// resolved theme without pulling in command, IO, or option machinery.
-//
-// See the package-level docs and docs/themes.md for the full design.
+// The package does not depend on the nabat root package or IOStreams;
+// extensions can import it to read styles without pulling in command
+// or IO machinery.
 package theme

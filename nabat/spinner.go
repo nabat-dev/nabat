@@ -31,27 +31,9 @@ import (
 const defaultSpinnerDelay = 200 * time.Millisecond
 
 // SpinnerType selects spinner frames for [WithSpinnerType], [Context.Spinner],
-// and [Context.Status].
+// and [Context.Status]. Use the Spinner* helpers ([SpinnerDots], [SpinnerLine],
+// and the rest) instead of importing charm.land/bubbles/v2/spinner.
 type SpinnerType spinner.Spinner
-
-// Spinner presets for use with [WithSpinnerType].
-// These are aliases for charm.land/bubbles/v2/spinner types, so callers do
-// not need to import the spinner package directly.
-//
-// Available presets:
-//
-//   - [SpinnerLine]      — rotating line (| / - \)
-//   - [SpinnerDots]      — Braille-dot animation (default)
-//   - [SpinnerMiniDot]   — single Braille dot
-//   - [SpinnerJump]      — jumping dot animation
-//   - [SpinnerPoints]    — three pulsing points
-//   - [SpinnerPulse]     — pulsing block
-//   - [SpinnerGlobe]     — rotating globe emoji
-//   - [SpinnerMoon]      — moon-phase animation
-//   - [SpinnerMonkey]    — see/hear/speak-no-evil monkey emoji
-//   - [SpinnerMeter]     — filling meter animation
-//   - [SpinnerHamburger] — three-line hamburger animation
-//   - [SpinnerEllipsis]  — animated ellipsis (., .., ...)
 
 // SpinnerLine returns the rotating-line spinner preset (| / - \).
 func SpinnerLine() SpinnerType { return SpinnerType(spinner.Line) }
@@ -149,17 +131,13 @@ func WithSpinnerType(t SpinnerType) spinnerStatusOption {
 	}
 }
 
-// WithSpinnerIcons overrides the default row state icons. Only the non-empty
-// fields in icons are used; empty fields keep their built-in defaults
-// ("✓", "✗", "!", "•"). This option can be passed to both [Context.Spinner]
-// and [Context.Status].
+// WithSpinnerIcons overrides default row state icons. Only non-empty fields
+// apply; empty fields keep defaults ("✓", "✗", "!", "•"). Valid for both
+// [Context.Spinner] and [Context.Status].
 //
 // Example:
 //
-//	c.Spinner(fn, WithTitle("Deploying"), WithSpinnerIcons(Icons{
-//	    Success: "+",
-//	    Error:   "x",
-//	}))
+//	c.Spinner(fn, WithSpinnerIcons(Icons{Success: "+", Error: "x"}))
 func WithSpinnerIcons(icons Icons) spinnerStatusOption {
 	return sharedOption{
 		spinnerFn: func(c *spinnerConfig) error { c.icons = icons; return nil },
@@ -168,13 +146,12 @@ func WithSpinnerIcons(icons Icons) spinnerStatusOption {
 }
 
 // WithSpinnerDelay sets how long work must run before the animated spinner
-// appears. The default is 200ms. Pass 0 to start animation immediately.
-// Completing before the delay prints a static success/error line on stderr
-// and never starts the animation.
+// appears (default 200ms). Pass 0 to start immediately. Completing before
+// the delay prints a static success/error line and skips animation.
 //
 // Example:
 //
-//	c.Spinner(fn, WithTitle("Deploying"), WithSpinnerDelay(0))
+//	c.Spinner(fn, WithSpinnerDelay(0))
 func WithSpinnerDelay(d time.Duration) SpinnerOption {
 	return spinnerOnlyOption(func(c *spinnerConfig) error {
 		if d < 0 {
@@ -237,37 +214,21 @@ func (s *Spinner) completionIcon(fnErr error) string {
 	}
 }
 
-// Spinner runs fn while showing an animated single-line spinner on stderr in
-// interactive terminals. The callback receives a [*Spinner] handle; call
-// [Spinner.SetText] to update the header title while the work runs.
+// Spinner runs fn with an animated single-line spinner on stderr. Animation
+// starts after a short delay (default 200ms; see [WithSpinnerDelay]); if fn
+// finishes sooner, a static success or error line is printed instead.
 //
-// Animation starts only after a short delay (default 200ms; see
-// [WithSpinnerDelay]). If fn returns before the delay, Spinner prints a static
-// success or error line on stderr and never starts the animation. This avoids
-// terminal capability-probe leaks from short-lived TUI programs.
+// On a TTY, fn runs in a goroutine while the caller drives animation; Spinner
+// returns only after fn returns. Cancel waits for fn, then returns
+// [context.Canceled] when fn returned nil. Non-TTY mode prints the title once
+// and runs fn without animation. Prefer [Context.Status] for multi-row displays.
 //
-// On a TTY, fn runs in a separate goroutine while the calling goroutine drives
-// the animation loop. Spinner returns only after fn returns. Context
-// cancellation is observed by the animation loop, but does not preempt fn;
-// the loop waits for fn to finish, then returns [context.Canceled] when fn
-// itself returned nil.
+// Example:
 //
-// On completion the final state persists as static text in the terminal
-// scrollback. The header icon is "✓" on success and "✗" on error.
-//
-// When stderr is not a terminal, the title is printed once as a plain line and
-// fn runs without animation on the calling goroutine.
-//
-// For multi-row live status displays use [Context.Status] instead.
-//
-// Errors:
-//   - any error returned by fn (preferred over write or cancel errors)
-//   - errors from writing the spinner line to stderr
-//   - [*ConfigErrors] from option validation
-//   - [context.Canceled] when the context is canceled and fn returned nil
-//
-// Pass [WithTitle] for the initial header text. The signature matches
-// [Context.Status]: callback first, then options.
+//	return c.Spinner(func(sp *Spinner) error {
+//	    sp.SetText("Uploading")
+//	    return upload()
+//	}, WithTitle("Deploy"))
 func (c *Context) Spinner(fn func(*Spinner) error, opts ...SpinnerOption) error {
 	// Callback-first avoids a go1.27 printf-vet false positive when Context
 	// also has generic methods (title string was treated as a format).
@@ -346,7 +307,7 @@ func (c *Context) runTTYSpinner(
 
 	writeLive := func() error {
 		prefix := activeStyle.Render(frames[frameIdx%len(frames)])
-		title := handle.title()
+		title := sanitizeTTYText(handle.title())
 		var err error
 		if title != "" {
 			_, err = fmt.Fprintf(w, "\r\033[K%s %s", prefix, titleStyle.Render(title))
@@ -358,7 +319,7 @@ func (c *Context) runTTYSpinner(
 
 	writeDone := func(fnErr error, animated bool) error {
 		icon := handle.completionIcon(fnErr)
-		title := handle.title()
+		title := sanitizeTTYText(handle.title())
 		var err error
 		if animated {
 			if title != "" {

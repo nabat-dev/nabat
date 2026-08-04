@@ -14,27 +14,13 @@
 
 package theme
 
-// Untyped string constants for the well-known theme names shipped with
-// Nabat. Use them as the argument to nabat.WithTheme to get IDE
-// autocomplete and a compile-time check that the spelling matches an
-// embedded manifest:
+// Untyped string constants for built-in theme names. Pass to
+// [nabat.WithTheme]. Untyped so they mix with env/config strings.
+// Each name matches an embedded data/<name>.json file.
 //
-//	app, _ := nabat.New("myctl", nabat.WithTheme(theme.Dracula))
+// Example:
 //
-// These constants are untyped on purpose so they compose with strings
-// from other sources (env vars, flags, user config) without explicit
-// conversions:
-//
-//	name := os.Getenv("MYCTL_THEME")
-//	if name == "" {
-//	    name = theme.Default
-//	}
-//	app, _ := nabat.New("myctl", nabat.WithTheme(name))
-//
-// Every constant here corresponds to an embedded data/<name>.json file;
-// TestConstsHaveManifests in catalog_test.go enforces that the two stay
-// in lockstep so a misspelled or missing manifest fails the build, not
-// nabat.New at runtime.
+//	nabat.New("myctl", nabat.WithTheme(theme.Dracula))
 const (
 	// Default is the theme installed when the caller does not pass
 	// nabat.WithTheme. Capability-aware: defers to the terminal's

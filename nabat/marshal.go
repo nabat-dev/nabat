@@ -25,13 +25,8 @@ import (
 )
 
 // Marshal encodes v in the given format and returns the raw bytes without
-// writing or highlighting. Use [Context.HighlightString] or
-// [Context.FprintHighlight] when the caller owns encoding but wants theme-aware
-// chroma styling.
-//
-// Errors:
-//   - "nabat: unknown format %d" when f is not a [Format] constant
-//   - encoding errors from the selected marshaler
+// writing or highlighting. Unknown formats and encoding failures return an
+// error. Use [Context.HighlightString] for theme-aware chroma styling.
 func Marshal(v any, f Format) ([]byte, error) {
 	switch f {
 	case FormatJSON:

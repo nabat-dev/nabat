@@ -31,19 +31,12 @@ type parseConfig struct {
 	disableFlagParsing    bool
 }
 
-// WithParseOptions applies nested parsing options to the command.
-// Passing a nil [ParseOption] returns [ErrNilOption]. An empty opts slice is a
-// no-op.
+// WithParseOptions applies nested parsing options to the command. A nil
+// [ParseOption] returns [ErrNilOption]; an empty slice is a no-op.
 //
 // Example:
 //
-//	app.MustCommand("proxy",
-//	    WithParseOptions(
-//	        WithAllowUnknownFlags(),
-//	        WithTraverseChildren(true),
-//	    ),
-//	    WithRun(func(c *Context) error { return nil }),
-//	)
+//	WithParseOptions(WithAllowUnknownFlags(), WithTraverseChildren(true))
 func WithParseOptions(opts ...ParseOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		for i, o := range opts {

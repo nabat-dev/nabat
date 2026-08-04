@@ -17,20 +17,8 @@ package nabat
 import "fmt"
 
 // VersionOption configures the built-in version feature inside [WithVersion].
-//
-// Version is a built-in core feature: pass [WithVersion] to [New] or [MustNew]
-// and the App grows a `version` subcommand and a `--version` (`-v`) flag with
-// Nabat's themed output. Without [WithVersion], no version surface is installed.
-//
-// Defaults: subcommand "version", flag "--version", shorthand "-v". Tweak the
-// defaults by passing [VersionOption] values to [WithVersion]; disable a piece
-// with [WithoutVersionCommand], [WithoutVersionFlag], or
-// [WithoutVersionShorthand]. To opt out of the feature entirely, simply omit
-// [WithVersion].
-//
-// All polish options are [VersionOption] values that nest inside [WithVersion]
-// rather than living at the App level. This groups version-related config in
-// one place and keeps the App-level option list short.
+// Nested options tweak names and disable pieces; omit [WithVersion] to
+// install nothing.
 type VersionOption func(*versionConfig) error
 
 type versionConfig struct {
@@ -66,25 +54,13 @@ func (vc *versionConfig) validate() error {
 	return nil
 }
 
-// WithVersion enables the built-in version feature. The version string is
-// required and printed by both the `version` subcommand and the `--version`
-// flag. Empty strings return [ErrInvalidOption]; pass an explicit value such
-// as one read from [runtime/debug.ReadBuildInfo] for build-info derivation.
-//
-// Pass [VersionOption] values to override defaults or disable individual
-// pieces. Disabling both the flag and the command at the same time is an
-// error: omit [WithVersion] entirely instead.
+// WithVersion enables the built-in version feature. version is required and
+// printed by both the subcommand and flag. Empty version, or disabling both
+// flag and command, returns [ErrInvalidOption]; omit [WithVersion] instead.
 //
 // Example:
 //
-//	New("ctl",
-//	    WithVersion("1.2.3",
-//	        WithVersionCommit("abc1234"),
-//	        WithVersionShorthand('V'),
-//	    ),
-//	)
-//
-// Result: `ctl version`, `ctl version --format short`, `ctl --version`, `ctl -V`.
+//	New("ctl", WithVersion("1.2.3", WithVersionCommit("abc1234")))
 func WithVersion(version string, opts ...VersionOption) Option {
 	return optionFn(func(c *config) error {
 		if version == "" {
@@ -129,15 +105,13 @@ func WithVersionCommitDate(date string) VersionOption {
 	}
 }
 
-// WithVersionCommitDateTimeFormat sets the Go time layout used to format the
-// commit timestamp read from [runtime/debug.ReadBuildInfo] (vcs.time, always
-// RFC3339). Has no effect when the date is set explicitly via
-// [WithVersionCommitDate], since that value is used verbatim.
+// WithVersionCommitDateTimeFormat sets the Go time layout for the commit
+// timestamp from [runtime/debug.ReadBuildInfo]. Has no effect when
+// [WithVersionCommitDate] sets the date explicitly.
 //
 // Example:
 //
-//	WithVersionCommitDateTimeFormat("2006-01-02")          // date only
-//	WithVersionCommitDateTimeFormat("2006-01-02 15:04 MST") // compact with timezone
+//	WithVersionCommitDateTimeFormat("2006-01-02")
 func WithVersionCommitDateTimeFormat(layout string) VersionOption {
 	return func(vc *versionConfig) error {
 		if layout == "" {
@@ -161,9 +135,8 @@ func WithVersionCommandName(name string) VersionOption {
 	}
 }
 
-// WithoutVersionCommand disables the `version` subcommand. The `--version`
-// flag is still installed unless [WithoutVersionFlag] is also passed (in
-// which case [WithVersion] returns [ErrInvalidOption]).
+// WithoutVersionCommand disables the `version` subcommand. The flag remains
+// unless [WithoutVersionFlag] is also passed (then [WithVersion] errors).
 func WithoutVersionCommand() VersionOption {
 	return func(vc *versionConfig) error {
 		vc.commandDisabled = true
@@ -184,9 +157,8 @@ func WithVersionFlagName(name string) VersionOption {
 	}
 }
 
-// WithoutVersionFlag disables the `--version` flag. The `version` subcommand
-// is still installed unless [WithoutVersionCommand] is also passed (in which
-// case [WithVersion] returns [ErrInvalidOption]).
+// WithoutVersionFlag disables the `--version` flag. The subcommand remains
+// unless [WithoutVersionCommand] is also passed (then [WithVersion] errors).
 func WithoutVersionFlag() VersionOption {
 	return func(vc *versionConfig) error {
 		vc.flagDisabled = true

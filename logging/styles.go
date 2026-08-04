@@ -20,46 +20,35 @@ import (
 	"nabat.dev/theme"
 )
 
-// Styles holds lipgloss styles used by the logging extension to color
-// level badges and key/value pairs in structured log output.
-//
-// Construct one from a [theme.ResolvedTheme] via [FromTheme] (the default),
-// or build one by hand for custom handlers that want different visuals.
-// Once built, Styles is immutable and safe to share across goroutines.
+// Styles holds lipgloss styles for level badges and key/value pairs in
+// structured log output. Build with [FromTheme] or by hand. Once built,
+// Styles is immutable and safe to share across goroutines.
 type Styles struct {
-	// Debug styles the "DEBU" level badge for debug records.
+	// Debug styles the "DEBU" level badge.
 	Debug lipgloss.Style
 
-	// Info styles the "INFO" level badge for informational records.
+	// Info styles the "INFO" level badge.
 	Info lipgloss.Style
 
-	// Warn styles the "WARN" level badge for warning records.
+	// Warn styles the "WARN" level badge.
 	Warn lipgloss.Style
 
-	// Error styles the "ERRO" level badge for error records.
+	// Error styles the "ERRO" level badge.
 	Error lipgloss.Style
 
-	// Key styles structured-log attribute keys (the left side of `key=value`).
+	// Key styles structured-log attribute keys.
 	Key lipgloss.Style
 
-	// Value styles structured-log attribute values (the right side of `key=value`).
+	// Value styles structured-log attribute values.
 	Value lipgloss.Style
 }
 
-// FromTheme derives the logging extension's level-badge and key/value
-// styles from a [theme.ResolvedTheme] using the well-known semantic
-// tokens — [theme.StatusInfo], [theme.StatusWarning], [theme.StatusError]
-// for level badges and [theme.AccentPrimary], [theme.TextPrimary] for the
-// key=value pairs. Each badge is a fixed-width "DEBU" / "INFO" / "WARN" /
-// "ERRO" label rendered bold.
-//
-// FromTheme keeps theme derivation a logging-package concern so the
-// nabat root package does not have to know about logger concepts; the
-// nabat/logging extension owns its own visual contract end to end.
-//
-// Callers that want a different shape (different badge text, different
-// width, extra fields) can build a [Styles] value directly instead of
-// going through FromTheme.
+// FromTheme derives [Styles] from a [theme.ResolvedTheme] using
+// [theme.StatusInfo], [theme.StatusWarning], and [theme.StatusError] for
+// badges, and [theme.AccentPrimary] / [theme.TextPrimary] for key=value
+// pairs. Badges are fixed-width "DEBU" / "INFO" / "WARN" / "ERRO" labels
+// rendered bold. Callers that need a different shape can build [Styles]
+// directly.
 func FromTheme(rt theme.ResolvedTheme) Styles {
 	info := rt.Style(theme.StatusInfo)
 	warn := rt.Style(theme.StatusWarning)

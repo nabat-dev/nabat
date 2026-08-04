@@ -25,12 +25,8 @@ import (
 )
 
 // Success writes msg to stderr with a success symbol and optional key/value
-// pairs.
-//
-// Status and confirmation messages travel on the diagnostics stream so a
-// piped stdout (e.g. `mycli deploy --json | jq`) carries only the command's
-// product. The "product" itself goes through [Context.Print], [Context.JSON],
-// [Context.Table], etc., which write to [Context.IO.Out].
+// pairs so piped stdout stays clean for product output ([Context.Print],
+// [Context.JSON], [Context.Table], and related helpers).
 //
 // Example:
 //
@@ -41,9 +37,6 @@ func (c *Context) Success(msg string, args ...any) {
 
 // Warn writes msg to stderr with a warning symbol and optional key/value pairs.
 //
-// Diagnostics go to stderr (POSIX) so they remain visible when the command's
-// stdout is piped or redirected (e.g. `mycli deploy | jq`).
-//
 // Example:
 //
 //	c.Warn("slow query", "ms", elapsed)
@@ -53,9 +46,6 @@ func (c *Context) Warn(msg string, args ...any) {
 
 // Error writes msg to stderr with an error symbol and optional key/value pairs.
 //
-// Diagnostics go to stderr (POSIX) so error messages do not corrupt downstream
-// pipeline data on stdout.
-//
 // Example:
 //
 //	c.Error("deploy blocked", "reason", err)
@@ -63,13 +53,9 @@ func (c *Context) Error(msg string, args ...any) {
 	c.writeUserMessage(c.io.ErrOut, c.app.Theme().Style(theme.StatusError), "✗", msg, args...)
 }
 
-// Info writes msg to stderr with an info symbol and optional key/value pairs.
-//
-// Info messages are status narrative ("retrying", "connecting", "skipped")
-// and so travel on the diagnostics stream alongside [Context.Success],
-// [Context.Warn], and [Context.Error]. This keeps stdout reserved for the
-// command's product, matching clig.dev's "send status output to stderr"
-// guidance and so a piped stdout stays uncorrupted.
+// Info writes msg to stderr with an info symbol and optional key/value pairs
+// for status narrative ("retrying", "connecting"), keeping stdout for product
+// output.
 //
 // Example:
 //

@@ -71,12 +71,8 @@ func (a *App) applyHuhThemeForAdHocPrompt(form *huh.Form) {
 }
 
 // Input asks for one string value when [Context.IsInteractive] is true.
-//
-// Errors:
-//   - "nabat: input requires interactive terminal" when not interactive and
-//     no [WithDefault] is set
-//   - [*ConfigErrors] from option validation
-//   - errors from the prompt layer
+// Non-interactive use without [WithDefault] fails. Bad options yield
+// [*ConfigErrors]; the prompt layer may also fail.
 func (c *Context) Input(prompt string, opts ...FieldOption[string]) (string, error) {
 	pc, err := runAdhocPromptConfig(c, "input", prompt, opts)
 	if err != nil {
@@ -98,26 +94,15 @@ func (c *Context) Input(prompt string, opts ...FieldOption[string]) (string, err
 	return out, nil
 }
 
-// Confirm asks a yes/no question when [Context.IsInteractive] is true.
+// Confirm asks a yes/no question when interactive. Use [WithYes] for moderate
+// `--yes` bypass. Use [WithConfirmValue] and [WithConfirmInput] for
+// type-to-confirm; [WithYes] and [WithDefault] do not bypass that path.
 //
-// Bypass and safety options:
-//   - [WithConfirmValue] / [WithConfirmInput] implement type-to-confirm
-//     (Heroku-style `--confirm=name`) for severe destructive actions.
-//     When [WithConfirmValue] is set, [WithYes] does not bypass the check:
-//     the typed or flag value must still match. [WithDefault] is also
-//     ignored in that mode.
-//   - [WithYes] skips a moderate (y/N) confirm when the app's `--yes` flag
-//     is set. Use it only when [WithConfirmValue] is not set.
-//   - [WithBypassHint] customizes the [ConfirmationError] message
-//   - [WithDefault] supplies a non-interactive fallback for moderate
-//     confirms when no type-to-confirm is configured
+// Example:
 //
-// Errors:
-//   - [*ConfirmationError] (wrapping [ErrConfirmationRequired]) when not
-//     interactive and neither a matching [WithConfirmInput], [WithYes]
-//     (moderate only), nor [WithDefault] allows the call to proceed
-//   - [*ConfigErrors] from option validation
-//   - errors from the prompt layer
+//	ok, err := c.Confirm("Delete?", WithYes(flags.Yes), WithBypassHint("--yes"))
+//
+// It may return [*ConfirmationError], [*ConfigErrors], or a prompt error.
 func (c *Context) Confirm(prompt string, opts ...FieldOption[bool]) (bool, error) {
 	// Apply options without the early non-interactive fallback path so
 	// WithYes / WithConfirmValue can run first.
@@ -172,14 +157,9 @@ func (c *Context) Confirm(prompt string, opts ...FieldOption[bool]) (bool, error
 	return out, nil
 }
 
-// TextInput collects multi-line text when interactive. This is equivalent to
-// c.Input with [WithMultiline], provided as a convenience method.
-//
-// Errors:
-//   - "nabat: text input requires interactive terminal" when not interactive
-//     and no [WithDefault] is set
-//   - [*ConfigErrors] from option validation
-//   - errors from the prompt layer
+// TextInput collects multi-line text when interactive. Equivalent to
+// [Context.Input] with [WithMultiline]. Non-interactive use requires
+// [WithDefault]; otherwise returns an error.
 func (c *Context) TextInput(prompt string, opts ...FieldOption[string]) (string, error) {
 	// Inject WithMultiline as the first option so the caller doesn't have to.
 	allOpts := make([]FieldOption[string], 0, len(opts)+1)
@@ -205,14 +185,9 @@ func (c *Context) TextInput(prompt string, opts ...FieldOption[string]) (string,
 	return out, nil
 }
 
-// FilePicker collects a file path when interactive. This is equivalent to
-// c.Input with [WithFilePicker], provided as a convenience method.
-//
-// Errors:
-//   - "nabat: file picker requires interactive terminal" when not interactive
-//     and no [WithDefault] is set
-//   - [*ConfigErrors] from option validation
-//   - errors from the prompt layer
+// FilePicker collects a file path when interactive. Equivalent to
+// [Context.Input] with [WithFilePicker]. Non-interactive use requires
+// [WithDefault]; otherwise returns an error.
 func (c *Context) FilePicker(prompt string, opts ...FieldOption[string]) (string, error) {
 	allOpts := make([]FieldOption[string], 0, len(opts)+1)
 	allOpts = append(allOpts, WithFilePicker())
@@ -239,15 +214,13 @@ func (c *Context) FilePicker(prompt string, opts ...FieldOption[string]) (string
 
 // Select asks for one choice from choices when interactive. E is inferred
 // from the choices slice, enabling typed enum selects. When not interactive,
-// Select returns defaultVal without prompting.
-//
-// Errors:
-//   - [*ConfigErrors] from option validation
-//   - errors from the prompt layer
+// Select returns defaultVal without prompting. Bad options yield
+// [*ConfigErrors]; the prompt layer may also fail.
 func (c *Context) Select[E comparable](prompt string, choices []E, defaultVal E, opts ...SelectOption) (E, error) {
+	var zero E
 	var pc promptConfig
 	if err := applySelectOptions("select", opts, &pc); err != nil {
-		return defaultVal, err
+		return zero, err
 	}
 	if !c.interactive {
 		return defaultVal, nil
@@ -270,25 +243,22 @@ func (c *Context) Select[E comparable](prompt string, choices []E, defaultVal E,
 		f = f.Validate(func(v E) error { return fn(v) })
 	}
 	if err := c.app.runPromptField(f); err != nil {
-		return defaultVal, err
+		return zero, err
 	}
 	return out, nil
 }
 
 // MultiSelect asks for multiple choices when interactive. E is inferred from
 // the choices slice. When not interactive, MultiSelect returns defaultVal
-// without prompting.
-//
-// Errors:
-//   - [*ConfigErrors] from option validation
-//   - errors from the prompt layer
+// without prompting. Bad options yield [*ConfigErrors]; the prompt layer may
+// also fail.
 func (c *Context) MultiSelect[E comparable](prompt string, choices, defaultVal []E, opts ...MultiSelectOption) ([]E, error) {
 	var pc promptConfig
 	if err := applySelectOptions("multi-select", asSelectOptions(opts), &pc); err != nil {
-		return defaultVal, err
+		return nil, err
 	}
 	if !c.interactive {
-		return defaultVal, nil
+		return append([]E(nil), defaultVal...), nil
 	}
 	options := make([]huh.Option[E], 0, len(choices))
 	for _, ch := range choices {
@@ -311,7 +281,7 @@ func (c *Context) MultiSelect[E comparable](prompt string, choices, defaultVal [
 		f = f.Validate(func(v []E) error { return fn(v) })
 	}
 	if err := c.app.runPromptField(f); err != nil {
-		return defaultVal, err
+		return nil, err
 	}
 	return out, nil
 }

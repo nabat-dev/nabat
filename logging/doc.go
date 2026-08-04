@@ -12,16 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package logging provides a Nabat extension that installs a styled
-// [*slog.Logger] into the App, plus optional --verbose and
-// --log-level flag wiring. Use [ParseLevel] to parse the same level names
-// (debug, info, warn, error) elsewhere in your CLI.
-//
-//	import (
-//	    "log/slog"
-//	    "nabat.dev/nabat"
-//	    "nabat.dev/logging"
-//	)
+// Package logging installs a styled [*slog.Logger] via [nabat.WithExtension],
+// with optional --verbose / --log-level flags. [ParseLevel] accepts the same
+// level names. For a custom logger, use [nabat.WithLogger] instead.
 //
 //	app := nabat.MustNew("myctl",
 //	    nabat.WithExtension(logging.New(
@@ -29,7 +22,4 @@
 //	        logging.WithVerboseFlag("verbose"),
 //	    )),
 //	)
-//
-// To bring your own logger instead, use [nabat.WithLogger] at construction
-// time and skip this extension.
 package logging

@@ -66,33 +66,17 @@ type flagSpec struct {
 	isCount bool
 }
 
-// ArgOption configures one declarative positional argument. It is satisfied
-// by every helper that targets [WithArg], [WithSelectArg], or
-// [WithMultiSelectArg] — for example [WithRequired], [WithUsage], [WithEnv],
-// and the generic [WithPrompt] helper.
-//
-// ArgOption is an interface (not a function alias) so misuse such as passing
-// a flag-only option (e.g. [WithShort]) to [WithArg] is rejected by the Go
-// compiler at the call site instead of failing later at registration time or
-// being silently ignored at runtime.
-//
-// Options return an error so validation failures (invalid values, bad
-// combinations) aggregate into a [ConfigErrors] at command build time.
+// ArgOption configures one declarative positional argument for [WithArg],
+// [WithSelectArg], or [WithMultiSelectArg]. Misuse of flag-only options is a
+// compile-time error. Option errors aggregate into a [ConfigErrors] at build
+// time.
 type ArgOption interface {
 	applyToArg(*argSpec) error
 }
 
-// FlagOption configures one named flag. It is satisfied by every helper that
-// targets [WithFlag], [WithSelectFlag], or [WithMultiSelectFlag] — for
-// example [WithRequired], [WithUsage], [WithEnv], [WithShort],
-// [WithPersistent], [WithCompleter], and [WithDeprecated].
-//
-// FlagOption is an interface (not a function alias) so misuse such as
-// passing an arg-only option to [WithFlag] is rejected by the Go compiler at
-// the call site.
-//
-// Options return an error so validation failures aggregate into a
-// [ConfigErrors] at command build time.
+// FlagOption configures one named flag for [WithFlag], [WithSelectFlag], or
+// [WithMultiSelectFlag]. Misuse of arg-only options is a compile-time error.
+// Option errors aggregate into a [ConfigErrors] at build time.
 type FlagOption interface {
 	applyToFlag(*flagSpec) error
 }
@@ -108,11 +92,8 @@ type flagOptionFn func(*flagSpec) error
 func (f flagOptionFn) applyToFlag(s *flagSpec) error { return f(s) }
 
 // ArgOptions composes multiple [ArgOption] values into one. Options apply in
-// slice order on the same arg slot.
-//
-// Errors:
-//   - [ErrNilOption]: a nil entry appears in opts
-//   - errors from individual options
+// slice order on the same arg slot. A nil entry returns [ErrNilOption]; other
+// failures come from the individual options.
 func ArgOptions(opts ...ArgOption) ArgOption {
 	return argOptionFn(func(s *argSpec) error {
 		for i, o := range opts {
@@ -128,11 +109,8 @@ func ArgOptions(opts ...ArgOption) ArgOption {
 }
 
 // FlagOptions composes multiple [FlagOption] values into one. Options apply in
-// slice order on the same flag slot.
-//
-// Errors:
-//   - [ErrNilOption]: a nil entry appears in opts
-//   - errors from individual options
+// slice order on the same flag slot. A nil entry returns [ErrNilOption]; other
+// failures come from the individual options.
 func FlagOptions(opts ...FlagOption) FlagOption {
 	return flagOptionFn(func(s *flagSpec) error {
 		for i, o := range opts {
@@ -205,15 +183,12 @@ func applyFlagOptions(opts []FlagOption) (flagSpec, error) {
 // does not accept either interface (e.g. as a [CommandOption]) fails at
 // compile time.
 
-// WithRequired marks an arg or flag as required; resolution fails if no
-// value is found from CLI, env, prompt, or default.
+// WithRequired marks an arg or flag as required; resolution fails if no value
+// is found from CLI, env, prompt, or default.
 //
-// Example (positional):
+// Example:
 //
 //	WithArg("name", "", WithRequired())
-//
-// Example (flag):
-//
 //	WithFlag("token", "", WithRequired(), WithEnv("token"))
 func WithRequired() interface {
 	ArgOption
@@ -290,13 +265,10 @@ func WithShort(r rune) FlagOption {
 	})
 }
 
-// WithCount registers the flag as a counter (for example `-v`, `-vv`, `-vvv`).
-// Each occurrence increments an [int] value. Combine with [WithFlag] and an int
-// default, typically [0]:
+// WithCount registers the flag as a counter (-v, -vv, -vvv). Combine with
+// [WithFlag] and an int default (typically 0).
 //
 //	WithFlag("verbose", 0, WithShort('v'), WithCount())
-//
-// WithCount is valid only when the flag's default type is int.
 func WithCount() FlagOption {
 	return flagOptionFn(func(s *flagSpec) error {
 		s.isCount = true
@@ -314,12 +286,8 @@ func WithPersistent() FlagOption {
 }
 
 // WithCompleter registers a shell completion function for a flag's value.
-// fn must not be nil. The returned candidates are shown by the user's shell
-// when [WithCompletion] (or any equivalent install path) has been set up.
-//
-// "Completer" names the per-flag callback to keep it distinct from
-// [WithCompletion], the App-level switch that installs the `completion`
-// subcommand and its shell-script generators.
+// fn must not be nil. Distinct from [WithCompletion] (the `completion`
+// subcommand).
 //
 // Example:
 //
@@ -328,9 +296,6 @@ func WithPersistent() FlagOption {
 //	        return []string{"eu-1", "us-1"}, CompletionNoFileComp
 //	    },
 //	))
-//
-// Errors:
-//   - "nabat: WithCompleter function cannot be nil": fn is nil.
 func WithCompleter(fn CompletionFunc) FlagOption {
 	return flagOptionFn(func(s *flagSpec) error {
 		if fn == nil {

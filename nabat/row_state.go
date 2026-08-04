@@ -51,17 +51,13 @@ const (
 	RowDone
 )
 
-// Icons configures the symbols shown for each terminal [RowState] in a
-// [Status] or [Spinner] display. Product chrome chips use the separate
-// [Icon] type ([IconSuccess], [NewIcon], …); [WithSpinnerIcons] does not
-// change [Context.Badge] output.
-//
-// All fields fall back to Unicode symbols when left empty; only set the
-// fields you want to override.
+// Icons configures symbols for each terminal [RowState] in a [Status] or
+// [Spinner] display. Distinct from product chrome [Icon] chips; [WithSpinnerIcons]
+// does not change [Context.Badge]. Empty fields keep Unicode defaults.
 //
 // Example:
 //
-//	nabat.WithSpinnerIcons(nabat.Icons{Success: "+", Error: "x"})
+//	WithSpinnerIcons(Icons{Success: "+", Error: "x"})
 type Icons struct {
 	// Success is the icon for [RowSuccess] rows. Default: "✓".
 	Success string
@@ -148,4 +144,25 @@ func padRight(s string, width int) string {
 // ANSI escape sequences and accounting for East Asian wide characters.
 func visibleWidth(s string) int {
 	return ansi.StringWidth(s)
+}
+
+// sanitizeTTYText strips C0 controls so live spinner/status titles and cells
+// cannot inject ESC sequences into ANSI rewrite lines. Tab, CR, and LF become
+// spaces (consecutive whitespace collapsed to one). Non-TTY paths may still
+// print the original text.
+func sanitizeTTYText(s string) string {
+	if s == "" {
+		return s
+	}
+	mapped := strings.Map(func(r rune) rune {
+		switch {
+		case r == '\t', r == '\n', r == '\r':
+			return ' '
+		case r < 0x20, r == 0x7f:
+			return -1
+		default:
+			return r
+		}
+	}, s)
+	return strings.Join(strings.Fields(mapped), " ")
 }

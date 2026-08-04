@@ -21,46 +21,28 @@ import (
 )
 
 // Requirement declares the [Token] set a consumer reads from a
-// [ResolvedTheme]. Extensions and the framework itself produce
-// Requirement values so the app can detect, at construction time,
-// when an installed theme is missing tokens a consumer needs.
-//
-// The Consumer field identifies who needs the tokens (typically the
-// extension name, "logging extension", or "core help renderer") and
-// is folded into the diagnostic message so users can act on the
-// signal: "set these tokens in your manifest, or pick a different
-// theme."
-//
-// Requirement is plain data; pass it by value. The framework treats
-// the Tokens slice as read-only.
+// [ResolvedTheme]. Consumer identifies the requester in diagnostics
+// (for example "logging extension"). Plain data; pass by value; treat
+// Tokens as read-only.
 type Requirement struct {
 	Consumer string
 	Tokens   []Token
 }
 
-// Require returns a [Requirement] for the supplied consumer name and
-// the tokens it reads. It is the canonical constructor; using a
-// struct literal works too but Require keeps call sites tidy:
+// Require returns a [Requirement] for consumer and the tokens it reads.
 //
-//	func (e *Extension) ThemeRequires() theme.Requirement {
-//	    return theme.Require("logging extension",
-//	        theme.StatusInfo, theme.StatusWarning, theme.StatusError,
-//	        theme.AccentPrimary, theme.TextPrimary,
-//	    )
-//	}
+// Example:
+//
+//	return theme.Require("logging extension",
+//	    theme.StatusInfo, theme.StatusWarning, theme.StatusError,
+//	)
 func Require(consumer string, tokens ...Token) Requirement {
 	return Requirement{Consumer: consumer, Tokens: tokens}
 }
 
 // CoreRequirements returns the [Requirement] entries the nabat root
-// package's own output / help / structured paths read from a
-// [ResolvedTheme]. The framework includes this list automatically
-// when validating; extensions only need to declare the tokens they
-// add on top.
-//
-// Adding a new core consumer (a new Status*, Text*, etc.) means
-// adding to the right Requirement here so missing-token diagnostics
-// stay accurate.
+// package reads from a [ResolvedTheme]. The framework includes this
+// list automatically; extensions declare only what they add.
 func CoreRequirements() []Requirement {
 	return []Requirement{
 		{
@@ -89,17 +71,12 @@ func CoreRequirements() []Requirement {
 	}
 }
 
-// HasToken reports whether token t resolves to a non-zero
-// [lipgloss.Style] on this [ResolvedTheme] — either directly via
-// [Palette.Tokens] or transitively through the alias chain. It is
-// the predicate the framework uses for requirement validation;
-// consumers querying styles still call [ResolvedTheme.Style], which
-// returns the zero style on a miss.
+// HasToken reports whether token t is covered on this [ResolvedTheme],
+// either directly or via the alias chain.
 //
-// HasToken treats only "set to a non-zero style" as covered. A token
-// explicitly set to the zero [lipgloss.Style] is reported as covered
-// because the manifest author opted in (the only way to land a zero
-// style is an explicit empty styleSpec).
+// A token explicitly set to the zero [lipgloss.Style] counts as covered
+// (the author opted in). Consumers that need the style still call
+// [ResolvedTheme.Style].
 func (r ResolvedTheme) HasToken(t Token) bool {
 	if r.tokens == nil {
 		return false
@@ -120,11 +97,8 @@ func (r ResolvedTheme) HasToken(t Token) bool {
 	return false
 }
 
-// MissingTokens returns the tokens from req that this [ResolvedTheme]
-// does not cover (neither directly nor via the alias chain). The
-// result is sorted lexically so error messages are deterministic.
-//
-// An empty return means the requirement is fully satisfied.
+// MissingTokens returns tokens from req that this [ResolvedTheme] does
+// not cover. The result is sorted lexically; empty means fully satisfied.
 func (r ResolvedTheme) MissingTokens(req Requirement) []Token {
 	if len(req.Tokens) == 0 {
 		return nil
@@ -139,20 +113,14 @@ func (r ResolvedTheme) MissingTokens(req Requirement) []Token {
 	return out
 }
 
-// CheckRequirements applies every [Requirement] in reqs to this
-// [ResolvedTheme] and returns one error per consumer whose tokens are
-// not fully covered. The errors are joined; nil means every
-// consumer's requirement is satisfied.
+// CheckRequirements returns an error listing consumers whose tokens
+// this [ResolvedTheme] does not fully cover. nil means all satisfied.
 //
 // Diagnostic format:
 //
 //	theme "minimal" is missing tokens required by:
 //	  - logging extension: status.info, status.warning
 //	  - core help renderer: text.title
-//
-// The framework calls CheckRequirements at App.finalize time. The
-// resulting error either blocks construction (when the strict mode
-// is on) or is rendered as a warning to stderr (the default).
 func (r ResolvedTheme) CheckRequirements(reqs []Requirement) error {
 	if len(reqs) == 0 {
 		return nil

@@ -15,6 +15,7 @@
 package nabat
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -149,4 +150,27 @@ func TestWithCommandAcceptsCommandOnlyOptions(t *testing.T) {
 	require.NotNil(t, hidden)
 	assert.True(t, hidden.Hidden)
 	assert.Equal(t, []string{"h"}, hidden.Aliases)
+}
+
+func TestCommandInitFailureRollsBackRegistration(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("init failed")
+	io, _, _, _ := testIO()
+	app := MustNew("myctl", WithIO(io))
+	cmd, err := app.Command("broken",
+		WithRun(func(c *Context) error { return nil }),
+		WithCommandInit(func(*Command) error { return boom }),
+	)
+	require.Error(t, err)
+	assert.Nil(t, cmd)
+	assert.ErrorIs(t, err, boom)
+
+	for _, child := range app.root.Commands() {
+		assert.NotEqual(t, "broken", child.Name(),
+			"failed init must not leave the command registered")
+	}
+	for c := range app.meta {
+		assert.NotEqual(t, "broken", c.Name())
+	}
 }

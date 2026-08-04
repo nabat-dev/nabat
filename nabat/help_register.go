@@ -20,27 +20,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// registerHelp wires Nabat's built-in help feature onto the root command. It is
-// called from [New] after the root spec has been validated and the App struct
-// built, but before user-defined root flags are registered on Cobra. The
-// behavior is driven entirely by the helpConfig on [config]; see
-// help_options.go for the public option surface.
-//
-// Steps:
-//  1. If WithoutHelp was used, leave the root untouched (Cobra defaults take
-//     over: stock --help, stock template).
-//  2. Register the Nabat custom renderer via SetHelpFunc.
-//  3. If WithHelpCommand was used, register the opt-in `help <subcmd>` on root.
-//  4. If a help flag name is set (the default), append a persistent boolean
-//     flag to the root spec. The flag is visible in rendered help so users
-//     discover --help (and any shorthand) the same way they do in cobra,
-//     kubectl, gh, etc. When the user renamed the primary flag via
-//     [WithHelpFlagName], a hidden --help alias is also appended to preempt
-//     Cobra's auto-injected --help and avoid duplicates. The actual Cobra
-//     registration happens in the standard root-flag loop in [New].
-//  5. Register a global pre-run hook that prints help and short-circuits when
-//     the help flag is true. The hook handles the renamed-flag case where
-//     Cobra's automatic --help short-circuit does not fire.
+// registerHelp wires built-in help onto the root from helpConfig (see
+// help_options.go). Called from [New] before root flags register.
+// WithoutHelp leaves Cobra defaults; otherwise it sets the custom renderer,
+// optional help subcommand, persistent help flag (plus a hidden --help alias
+// when renamed via [WithHelpFlagName]), and a pre-run short-circuit for the
+// help flag.
 func (a *App) registerHelp() error {
 	h := a.cfg.help
 	if h.disabled {

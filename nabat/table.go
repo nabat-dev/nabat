@@ -21,36 +21,12 @@ import (
 	"nabat.dev/theme"
 )
 
-// HeaderRow denotes the header row index passed to [WithTableStyleFunc].
-// Use this value to identify header cells inside a style function callback.
-//
-// Example:
-//
-//	WithTableStyleFunc(func(row, col int) lipgloss.Style {
-//		if row == HeaderRow {
-//			return lipgloss.NewStyle().Bold(true)
-//		}
-//		return lipgloss.NewStyle()
-//	})
+// HeaderRow is the header row index passed to [WithTableStyleFunc] (-1).
 const HeaderRow = table.HeaderRow
 
-// Border presets for use with [WithTableBorder].
-// These are aliases for lipgloss border types, so callers do not need to import
-// lipgloss directly.
-//
-// Available presets:
-//
-//   - [BorderNormal] — single-line Unicode box drawing (default)
-//   - [BorderRounded] — rounded corners
-//   - [BorderBlock] — full-block characters
-//   - [BorderMarkdown] — pipe-and-dash Markdown table style
-//   - [BorderThick] — heavy Unicode box drawing
-//   - [BorderDouble] — double-line Unicode box drawing
-//   - [BorderHidden] — blank-character border that occupies the same width as a real border
-//   - [BorderASCII] — plain ASCII characters (+, -, |)
-
 // BorderNormal returns a single-line Unicode box-drawing border (default for
-// [Context.Table]).
+// [Context.Table]). Other Border* helpers cover rounded, block, markdown,
+// thick, double, hidden, and ASCII styles.
 func BorderNormal() lipgloss.Border { return lipgloss.NormalBorder() }
 
 // BorderRounded returns a single-line Unicode border with rounded corners.
@@ -93,16 +69,7 @@ type tableConfig struct {
 	borderRow    bool
 }
 
-// TableOption configures the [Context.Table] output method.
-// Pass one or more options to customize borders, styling, width, and wrapping.
-//
-// Example:
-//
-//	c.Table(headers, rows,
-//		WithTableBorder(BorderRounded()),
-//		WithTableWidth(80),
-//		WithTableBorderRow(true),
-//	)
+// TableOption configures [Context.Table] (borders, styling, width, wrapping).
 type TableOption func(*tableConfig)
 
 // WithTableBorder sets the border shape drawn around and inside the table.
@@ -138,9 +105,8 @@ func WithTableHeaderStyle(s lipgloss.Style) TableOption {
 }
 
 // WithTableCellStyle sets the base [lipgloss] style for data cells.
-// It applies to all non-header rows. The default comes from
-// [Theme.TableCellStyle].
-// Use [WithTableStyleFunc] for per-cell control.
+// Defaults to [Theme.TableCellStyle]; use [WithTableStyleFunc] for per-cell
+// control.
 //
 // Example:
 //
@@ -149,22 +115,15 @@ func WithTableCellStyle(s lipgloss.Style) TableOption {
 	return func(c *tableConfig) { c.cellStyle = s }
 }
 
-// WithTableStyleFunc sets a per-cell style function that receives the row and
-// column indices and returns the [lipgloss] style for that cell. When set, it
-// overrides
-// [WithTableHeaderStyle] and [WithTableCellStyle].
-// The row parameter is [HeaderRow] (-1) for header cells.
+// WithTableStyleFunc sets a per-cell style from row and column indices.
+// When set, it overrides [WithTableHeaderStyle] and [WithTableCellStyle].
+// Row is [HeaderRow] for header cells.
 //
 // Example:
 //
 //	WithTableStyleFunc(func(row, col int) lipgloss.Style {
-//		if row == HeaderRow {
-//			return lipgloss.NewStyle().Bold(true)
-//		}
-//		if row%2 == 0 {
-//			return lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-//		}
-//		return lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+//	    if row == HeaderRow { return lipgloss.NewStyle().Bold(true) }
+//	    return lipgloss.NewStyle()
 //	})
 func WithTableStyleFunc(fn func(row, col int) lipgloss.Style) TableOption {
 	return func(c *tableConfig) { c.styleFunc = fn }
@@ -234,21 +193,12 @@ func WithTableBorderRow(enabled bool) TableOption {
 	return func(c *tableConfig) { c.borderRow = enabled }
 }
 
-// Table prints a styled table to the command's output writer.
-// It applies the current [Theme] table styles by default. Pass [TableOption]
-// values to override borders, styling, width, or wrapping.
+// Table prints a styled table to the command's output writer. Theme styles
+// apply by default; pass [TableOption] values to override.
 //
 // Example:
 //
-//	c.Table([]string{"Name", "Status"}, [][]string{
-//		{"api", "running"},
-//		{"web", "stopped"},
-//	})
-//
-//	c.Table(headers, rows,
-//		WithTableBorder(BorderRounded()),
-//		WithTableWidth(80),
-//	)
+//	c.Table([]string{"Name", "Status"}, [][]string{{"api", "running"}})
 func (c *Context) Table(headers []string, rows [][]string, opts ...TableOption) {
 	rt := c.app.Theme()
 	cfg := &tableConfig{

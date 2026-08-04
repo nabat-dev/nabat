@@ -55,15 +55,12 @@ func (e *ConfirmationError) Unwrap() error {
 }
 
 // WithYes bypasses a moderate [Context.Confirm] when yes is true (typically
-// from an app `--yes` flag). When yes is false, Confirm proceeds normally.
-//
-// WithYes does not bypass type-to-confirm: when [WithConfirmValue] is set,
-// the confirm input must still match. Prefer WithYes alone for moderate
-// (y/N) actions, and [WithConfirmValue] / [WithConfirmInput] for severe ones.
+// from an app `--yes` flag). It does not bypass type-to-confirm
+// ([WithConfirmValue] / [WithConfirmInput]).
 //
 // Example:
 //
-//	ok, err := c.Confirm("Delete release?", nabat.WithYes(flags.Yes), nabat.WithBypassHint("--yes"))
+//	ok, err := c.Confirm("Delete?", WithYes(flags.Yes), WithBypassHint("--yes"))
 func WithYes(yes bool) FieldOption[bool] {
 	return fieldOpt[bool]{fn: func(pc *promptConfig) error {
 		pc.bypassYes = yes
@@ -71,22 +68,12 @@ func WithYes(yes bool) FieldOption[bool] {
 	}}
 }
 
-// WithConfirmValue enables type-to-confirm for severe destructive actions.
-// Interactively, the user must type expected exactly. Non-interactively,
-// [WithConfirmInput] must supply the same string (typically from a
-// `--confirm` flag).
-//
-// When WithConfirmValue is set, [WithYes] and [WithDefault] do not satisfy
-// the confirm: only a matching [WithConfirmInput] or an interactive match
-// proceeds.
+// WithConfirmValue requires the user to type expected exactly (or pass it
+// via [WithConfirmInput]). [WithYes] and [WithDefault] do not bypass this.
 //
 // Example:
 //
-//	ok, err := c.Confirm("This will delete production.",
-//	    nabat.WithConfirmValue("production"),
-//	    nabat.WithConfirmInput(flags.Confirm),
-//	    nabat.WithBypassHint("--confirm=production"),
-//	)
+//	c.Confirm("Delete?", WithConfirmValue("prod"), WithConfirmInput(flags.Confirm))
 func WithConfirmValue(expected string) FieldOption[bool] {
 	return fieldOpt[bool]{fn: func(pc *promptConfig) error {
 		pc.confirmValue = expected

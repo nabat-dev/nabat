@@ -14,9 +14,6 @@
 
 // Package nabattest provides test helpers for Nabat CLI applications.
 //
-// It follows the same pattern as [net/http/httptest]: a real, importable
-// package nested under the library it supports.
-//
 //	import (
 //	    "nabat.dev/nabat"
 //	    "nabat.dev/nabat/nabattest"

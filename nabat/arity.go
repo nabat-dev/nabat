@@ -31,18 +31,12 @@ type arityConfig struct {
 	maxN  *int
 }
 
-// WithArgArity applies nested arity rules. [WithArgArity] may only be used
-// once per command.
-// Passing a nil [ArityOption] returns [ErrNilOption].
+// WithArgArity applies nested arity rules once per command. A nil
+// [ArityOption] returns [ErrNilOption].
 //
 // Example:
 //
-//	app.MustCommand("copy",
-//	    WithArg("src", "", WithRequired()),
-//	    WithArg("dst", "", WithRequired()),
-//	    WithArgArity(WithExactArgCount(2)),
-//	    WithRun(func(c *Context) error { return nil }),
-//	)
+//	WithArgArity(WithExactArgCount(2))
 func WithArgArity(opts ...ArityOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		if len(c.arityOpts) > 0 {

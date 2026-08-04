@@ -21,20 +21,14 @@ import (
 	"nabat.dev/theme"
 )
 
-// StatusRow is a single keyed row in a [Status] live display. It tracks a
-// visible label, display cells, a [RowState], optional icon and style
-// overrides, a sort priority, a hidden flag, and an elapsed timer.
+// StatusRow is a single keyed row in a [Status] live display. The key from
+// [Status.Row] identifies the row for dedup but is not shown; use
+// [StatusRow.Label] for the visible first column. All exported methods are
+// safe for concurrent use.
 //
-// The key passed to [Status.Row] identifies the row for dedup and updates but
-// is never shown directly; use [StatusRow.Label] to set the visible first
-// column.
+// Example:
 //
-// All exported methods are safe for concurrent use from multiple goroutines.
-// The recommended call order in a chain is:
-//
-//	row.Label(name).Priority(n).Set(cells...).Style(token).Success()
-//
-// Any order is valid; methods are independent setters.
+//	row.Label(name).Set(cells...).Success()
 type StatusRow struct {
 	mu       sync.Mutex
 	key      string
@@ -46,7 +40,8 @@ type StatusRow struct {
 	priority *int         // nil = unprioritized
 	hidden   bool
 	created  time.Time
-	frozenAt time.Duration // zero = timer still ticking
+	frozen   bool          // true once a terminal/hide call freezes the timer
+	frozenAt time.Duration // elapsed at freeze; meaningful only when frozen
 }
 
 // Label sets the visible first column. When nil (never called), the key is
@@ -106,10 +101,8 @@ func (r *StatusRow) Priority(n int) *StatusRow {
 	return r
 }
 
-// Success marks the row as successfully completed. The animation stops, the
-// icon becomes the success symbol (default "✓"), the row style becomes
-// [theme.StatusSuccess], and the elapsed timer freezes. It is safe to call
-// from any goroutine.
+// Success marks the row completed: stops animation, success icon,
+// [theme.StatusSuccess] style, and freezes the elapsed timer. Goroutine-safe.
 func (r *StatusRow) Success() *StatusRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -118,9 +111,8 @@ func (r *StatusRow) Success() *StatusRow {
 	return r
 }
 
-// Error marks the row as failed. The animation stops, the icon becomes the
-// error symbol (default "✗"), the row style becomes [theme.StatusError], and
-// the elapsed timer freezes. It is safe to call from any goroutine.
+// Error marks the row failed: stops animation, error icon, [theme.StatusError]
+// style, and freezes the elapsed timer. Goroutine-safe.
 func (r *StatusRow) Error() *StatusRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -129,10 +121,8 @@ func (r *StatusRow) Error() *StatusRow {
 	return r
 }
 
-// Warn marks the row as a warning or partial failure. The animation stops,
-// the icon becomes the warning symbol (default "!"), the row style becomes
-// [theme.StatusWarning], and the elapsed timer freezes. It is safe to call
-// from any goroutine.
+// Warn marks the row as a warning: stops animation, warning icon,
+// [theme.StatusWarning] style, and freezes the elapsed timer. Goroutine-safe.
 func (r *StatusRow) Warn() *StatusRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -141,9 +131,8 @@ func (r *StatusRow) Warn() *StatusRow {
 	return r
 }
 
-// Done marks the row with neutral completion. The animation stops, the icon
-// becomes the done symbol (default "•"), the elapsed timer freezes, and no
-// special theme color is applied. It is safe to call from any goroutine.
+// Done marks neutral completion: stops animation, done icon, freezes the
+// elapsed timer, no special theme color. Goroutine-safe.
 func (r *StatusRow) Done() *StatusRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -152,9 +141,8 @@ func (r *StatusRow) Done() *StatusRow {
 	return r
 }
 
-// Active transitions the row back to [RowActive]. The animation restarts, the
-// elapsed timer resumes from where it was frozen, and the row becomes visible
-// again if it was hidden. It is safe to call from any goroutine.
+// Active returns the row to [RowActive]: restarts animation, resumes the
+// elapsed timer, and shows the row if hidden. Goroutine-safe.
 func (r *StatusRow) Active() *StatusRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -165,9 +153,7 @@ func (r *StatusRow) Active() *StatusRow {
 }
 
 // Hide removes the row from the display without deleting it from the dedup
-// map. The row can be made visible again by calling [StatusRow.Show] or
-// [StatusRow.Active]. Hidden rows still count toward completion state. It is
-// safe to call from any goroutine.
+// map. Restore with [StatusRow.Show] or [StatusRow.Active]. Goroutine-safe.
 func (r *StatusRow) Hide() *StatusRow {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -186,16 +172,19 @@ func (r *StatusRow) Show() *StatusRow {
 }
 
 // freezeTimer records the elapsed duration if the timer is still ticking.
-// The caller must hold r.mu.
+// The caller must hold r.mu. A freeze at zero elapsed is preserved via
+// [StatusRow.frozen] so the timer does not keep advancing.
 func (r *StatusRow) freezeTimer() {
-	if r.frozenAt == 0 {
+	if !r.frozen {
 		r.frozenAt = time.Since(r.created)
+		r.frozen = true
 	}
 }
 
 // resumeTimer clears the frozen marker so the timer ticks again.
 // The caller must hold r.mu.
 func (r *StatusRow) resumeTimer() {
+	r.frozen = false
 	r.frozenAt = 0
 }
 
@@ -223,7 +212,7 @@ func (r *StatusRow) snapshot() rowSnapshot {
 	cells := append([]string(nil), r.cells...)
 
 	var elapsed time.Duration
-	if r.frozenAt != 0 {
+	if r.frozen {
 		elapsed = r.frozenAt
 	} else {
 		elapsed = time.Since(r.created)

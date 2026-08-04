@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +26,15 @@ import (
 
 	"nabat.dev/theme"
 )
+
+func TestSanitizeTTYText(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "hello world", sanitizeTTYText("hello\r\nworld"))
+	assert.Equal(t, "ab", sanitizeTTYText("a\x1bb"))
+	assert.Equal(t, "a b", sanitizeTTYText("a\tb"))
+	assert.Equal(t, "", sanitizeTTYText("\x00\x07"))
+}
 
 // TestStatusRowCreatesOnFirstCall asserts that [Status.Row] creates a new row
 // on first call and returns the same pointer on subsequent calls with the same
@@ -345,14 +355,16 @@ func TestStatusRowHideShowChainable(t *testing.T) {
 func TestStatusRowHideFreezesTimer(t *testing.T) {
 	t.Parallel()
 
-	st := &Status{}
-	row := st.Row("k")
-	time.Sleep(5 * time.Millisecond)
-	row.Hide()
-	frozen := row.snapshot().elapsed
+	synctest.Test(t, func(t *testing.T) {
+		st := &Status{}
+		row := st.Row("k")
+		time.Sleep(5 * time.Millisecond)
+		row.Hide()
+		frozen := row.snapshot().elapsed
 
-	time.Sleep(15 * time.Millisecond)
-	assert.Equal(t, frozen, row.snapshot().elapsed, "timer must be frozen after Hide")
+		time.Sleep(15 * time.Millisecond)
+		assert.Equal(t, frozen, row.snapshot().elapsed, "timer must be frozen after Hide")
+	})
 }
 
 // TestStatusRowHideNotCountedForTruncation asserts hidden rows are not
@@ -376,17 +388,19 @@ func TestStatusRowHideNotCountedForTruncation(t *testing.T) {
 func TestStatusRowActiveResumesTimer(t *testing.T) {
 	t.Parallel()
 
-	st := &Status{}
-	row := st.Row("k")
-	time.Sleep(5 * time.Millisecond)
-	row.Done()
-	frozen := row.snapshot().elapsed
+	synctest.Test(t, func(t *testing.T) {
+		st := &Status{}
+		row := st.Row("k")
+		time.Sleep(5 * time.Millisecond)
+		row.Done()
+		frozen := row.snapshot().elapsed
 
-	row.Active()
-	time.Sleep(10 * time.Millisecond)
+		row.Active()
+		time.Sleep(10 * time.Millisecond)
 
-	snap := row.snapshot()
-	assert.Greater(t, snap.elapsed, frozen, "timer must advance again after Active")
+		snap := row.snapshot()
+		assert.Greater(t, snap.elapsed, frozen, "timer must advance again after Active")
+	})
 }
 
 // TestStatusRowActiveShowsHiddenRow asserts that Active makes a hidden row
@@ -429,14 +443,16 @@ func TestStatusRowActiveChainable(t *testing.T) {
 func TestStatusRowSuccessFreezesTimer(t *testing.T) {
 	t.Parallel()
 
-	st := &Status{}
-	row := st.Row("k")
-	time.Sleep(10 * time.Millisecond)
-	row.Success()
+	synctest.Test(t, func(t *testing.T) {
+		st := &Status{}
+		row := st.Row("k")
+		time.Sleep(10 * time.Millisecond)
+		row.Success()
 
-	frozen := row.snapshot().elapsed
-	time.Sleep(20 * time.Millisecond)
-	assert.Equal(t, frozen, row.snapshot().elapsed, "timer must not advance after Success")
+		frozen := row.snapshot().elapsed
+		time.Sleep(20 * time.Millisecond)
+		assert.Equal(t, frozen, row.snapshot().elapsed, "timer must not advance after Success")
+	})
 }
 
 // TestStatusRowErrorSetsState asserts Error transitions to RowError.
@@ -477,16 +493,18 @@ func TestStatusRowDoneSetsNeutral(t *testing.T) {
 func TestStatusRowStateTransitionDoesNotRefreeze(t *testing.T) {
 	t.Parallel()
 
-	st := &Status{}
-	row := st.Row("k")
-	time.Sleep(5 * time.Millisecond)
-	row.Success()
-	frozen := row.snapshot().elapsed
+	synctest.Test(t, func(t *testing.T) {
+		st := &Status{}
+		row := st.Row("k")
+		time.Sleep(5 * time.Millisecond)
+		row.Success()
+		frozen := row.snapshot().elapsed
 
-	time.Sleep(10 * time.Millisecond)
-	row.Warn()
-	assert.Equal(t, frozen, row.snapshot().elapsed,
-		"second state transition must not change frozen elapsed time")
+		time.Sleep(10 * time.Millisecond)
+		row.Warn()
+		assert.Equal(t, frozen, row.snapshot().elapsed,
+			"second state transition must not change frozen elapsed time")
+	})
 }
 
 // TestStatusRowChainedMethods asserts method chaining works end-to-end.
@@ -507,17 +525,19 @@ func TestStatusRowChainedMethods(t *testing.T) {
 func TestStatusRowAutoTiming(t *testing.T) {
 	t.Parallel()
 
-	st := &Status{}
-	row := st.Row("k")
-	time.Sleep(15 * time.Millisecond)
+	synctest.Test(t, func(t *testing.T) {
+		st := &Status{}
+		row := st.Row("k")
+		time.Sleep(15 * time.Millisecond)
 
-	snap1 := row.snapshot()
-	assert.Greater(t, snap1.elapsed, time.Duration(0))
+		snap1 := row.snapshot()
+		assert.Greater(t, snap1.elapsed, time.Duration(0))
 
-	row.Done()
-	frozen := row.snapshot().elapsed
-	time.Sleep(15 * time.Millisecond)
-	assert.Equal(t, frozen, row.snapshot().elapsed, "elapsed must not advance after Done")
+		row.Done()
+		frozen := row.snapshot().elapsed
+		time.Sleep(15 * time.Millisecond)
+		assert.Equal(t, frozen, row.snapshot().elapsed, "elapsed must not advance after Done")
+	})
 }
 
 // TestRowColumnsIncludesElapsed asserts that rowColumns appends elapsed when
@@ -640,22 +660,43 @@ func TestStatusRowConcurrentSafe(t *testing.T) {
 }
 
 // TestStatusRowSnapshotConcurrentSafe asserts that concurrent calls to
-// snapshot and rowSnapshots are race-free.
+// snapshot and rowSnapshots are race-free, including Priority updates.
 func TestStatusRowSnapshotConcurrentSafe(t *testing.T) {
 	t.Parallel()
 
 	st := &Status{}
 	for i := range 5 {
-		st.Row(string(rune('a' + i)))
+		st.Row(string(rune('a' + i))).Priority(i)
 	}
 
 	var wg sync.WaitGroup
-	for range 10 {
+	for g := range 10 {
 		wg.Go(func() {
-			_ = st.rowSnapshots()
+			for i := range 50 {
+				st.Row(string(rune('a' + (i % 5)))).Priority((i + g) % 5)
+				_ = st.rowSnapshots()
+			}
 		})
 	}
 	wg.Wait()
+}
+
+// TestStatusRowFreezeAtZeroElapsed keeps the timer frozen when Success is
+// called before any measurable wall time has passed.
+func TestStatusRowFreezeAtZeroElapsed(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		st := &Status{}
+		row := st.Row("k")
+		row.Success()
+		frozen := row.snapshot().elapsed
+		assert.Equal(t, time.Duration(0), frozen)
+
+		time.Sleep(20 * time.Millisecond)
+		assert.Equal(t, frozen, row.snapshot().elapsed,
+			"zero-elapsed freeze must not resume ticking")
+	})
 }
 
 // TestFormatElapsedStatus asserts the formatting logic for various durations.

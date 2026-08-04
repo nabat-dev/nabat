@@ -16,23 +16,9 @@ package nabat
 
 import "fmt"
 
-// Completion is a built-in core feature: pass [WithCompletion] to [New] or
-// [MustNew] and the App grows a `completion` subcommand that emits shell
-// completion scripts for bash, zsh, fish, and PowerShell. Without
-// [WithCompletion], no `completion` subcommand is installed.
-//
-// Per-flag and per-positional completers ([WithCompleter] and
-// [WithPositionalCompleter]) are independent of this option: they always work
-// because Cobra's hidden `__complete` command is part of every Cobra binary.
-// [WithCompletion] is the convenience surface users invoke to obtain the
-// install scripts for their shell.
-//
-// Defaults: subcommand "completion", visible in help, all four shell
-// generators installed. Tweak with [CompletionOption] values nested inside
-// [WithCompletion] or omit it entirely to skip the subcommand.
-
 // CompletionOption configures the built-in completion feature inside
-// [WithCompletion].
+// [WithCompletion]. Per-flag [WithCompleter] and [WithPositionalCompleter]
+// work without installing the subcommand.
 type CompletionOption func(*completionConfig) error
 
 type completionConfig struct {
@@ -63,28 +49,13 @@ func (cc *completionConfig) validate() error {
 	return nil
 }
 
-// WithCompletion enables the built-in completion feature, installing a
-// `completion` subcommand with bash, zsh, fish, and PowerShell generators.
-// Pass [CompletionOption] values to override defaults or restrict the set of
-// installed generators. Omit [WithCompletion] entirely to skip the subcommand
-// surface (per-flag [WithCompleter] still works without it).
+// WithCompletion installs a `completion` subcommand with shell generators.
+// Pass [CompletionOption] values to override defaults. Omit it to skip the
+// subcommand; [WithCompleter] still works without it.
 //
 // Example:
 //
-//	New("ctl",
-//	    WithCompletion(),
-//	)
-//
-//	New("ctl",
-//	    WithCompletion(
-//	        WithCompletionName("comp"),
-//	        WithCompletionHidden(),
-//	        WithCompletionShells("bash", "zsh"),
-//	    ),
-//	)
-//
-// Result: `ctl completion bash`, `ctl completion zsh`, etc., each emitting a
-// ready-to-source shell script with install instructions in `--help`.
+//	New("ctl", WithCompletion(WithCompletionShells("bash", "zsh")))
 func WithCompletion(opts ...CompletionOption) Option {
 	return optionFn(func(c *config) error {
 		cc := defaultCompletionConfig()
@@ -105,8 +76,7 @@ func WithCompletion(opts ...CompletionOption) Option {
 }
 
 // WithCompletionName overrides the subcommand name (default "completion").
-// Empty strings return [ErrInvalidOption]; omit [WithCompletion] entirely to
-// disable the subcommand surface.
+// Empty strings return [ErrInvalidOption].
 func WithCompletionName(name string) CompletionOption {
 	return func(cc *completionConfig) error {
 		if name == "" {
@@ -118,7 +88,6 @@ func WithCompletionName(name string) CompletionOption {
 }
 
 // WithCompletionHidden hides the completion subcommand from help listings.
-// The command remains invokable; it just does not appear in `--help` output.
 func WithCompletionHidden() CompletionOption {
 	return func(cc *completionConfig) error {
 		cc.hidden = true
@@ -126,9 +95,8 @@ func WithCompletionHidden() CompletionOption {
 	}
 }
 
-// WithCompletionShells restricts the installed generators to the listed
-// shells. When omitted, all four (bash, zsh, fish, powershell) are installed.
-// Unknown shell names return [ErrInvalidOption].
+// WithCompletionShells restricts installed generators to the listed shells
+// (default: bash, zsh, fish, powershell). Unknown names return [ErrInvalidOption].
 func WithCompletionShells(shells ...string) CompletionOption {
 	return func(cc *completionConfig) error {
 		cc.shells = append(cc.shells[:0:0], shells...)

@@ -398,7 +398,7 @@ func (a *App) styleShellExample(example string) string {
 				firstToken = true
 				continue
 			}
-			// Pipe, redirect, semicolon — consume up to two chars (||, >>).
+			// Pipe, redirect, semicolon: consume up to two chars (||, >>).
 			if ch == '|' || ch == '>' || ch == ';' {
 				end := pos + 1
 				if end < len(line) && (line[end] == '|' || line[end] == '>') {
@@ -494,17 +494,9 @@ func isNonZeroDefault(defValue string) bool {
 	return true
 }
 
-// isZeroDefault reports whether v is the zero value of one of the supported
-// [ArgValue] kinds. Used to suppress noisy "(default: )", "(default: 0)",
-// "(default: false)", and "(default: 0s)" lines in help output for positional
-// args. The typed switch is intentionally tied to [ArgValue]: when a new kind
-// is added there, this function should grow a matching case. Unknown types
-// return false so a newly added [ArgValue] still renders by default until the
-// helper is extended.
-//
-// String args with multiline or file-picker prompt modes are normalized to
-// plain string by [normalizeDefaultValue] before reaching this function.
-// Count flags ([WithCount]) are flag-only and rejected for args.
+// isZeroDefault reports whether v is the zero value of a supported [ArgValue]
+// kind, used to suppress noisy default lines in help. Unknown types return
+// false so new [ArgValue] kinds still render until a matching case is added.
 func isZeroDefault(v any) bool {
 	switch x := v.(type) {
 	case string:

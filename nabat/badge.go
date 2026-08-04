@@ -92,13 +92,12 @@ func (fb FieldBlock) Print() {
 	fb.c.Print(fb.text)
 }
 
-// Badge renders a styled status chip: icon glyph plus label. IconInfo is a
-// product chrome chip and is distinct from [Context.Info], which writes a
-// diagnostic message to stderr.
+// Badge renders a styled status chip: icon glyph plus label. Distinct from
+// [Context.Info], which writes a diagnostic message to stderr.
 //
 // Example:
 //
-//	c.Printf("%s %s\n", c.Render(theme.TextTitle, name), c.Badge(nabat.IconSuccess, "running"))
+//	c.Printf("%s %s\n", c.Render(theme.TextTitle, name), c.Badge(IconSuccess, "running"))
 func (c *Context) Badge(icon Icon, label string) string {
 	glyph := icon.glyph
 	if glyph == "" {
@@ -115,17 +114,12 @@ func (c *Context) Badge(icon Icon, label string) string {
 	return styled + " " + label
 }
 
-// Fields builds an aligned key/value block. Keys are styled with
-// [theme.TextMuted]. Padding is applied to the plain key text before styling
-// so ANSI width does not break alignment.
+// Fields builds an aligned key/value block. Keys use [theme.TextMuted];
+// padding is applied before styling so ANSI width does not break alignment.
 //
 // Example:
 //
-//	c.Fields([]nabat.Field{
-//	    {Key: "Backend", Value: "kind (docker)"},
-//	    {Key: "Context", Value: "kind-deployah"},
-//	    {Key: "Cloud provider", Value: c.Badge(nabat.IconSuccess, "running")},
-//	}, nabat.WithFieldKeyWidth(14)).Print()
+//	c.Fields([]Field{{Key: "Status", Value: c.Badge(IconSuccess, "running")}}).Print()
 func (c *Context) Fields(fields []Field, opts ...FieldsOption) FieldBlock {
 	cfg := fieldsConfig{}
 	for _, opt := range opts {

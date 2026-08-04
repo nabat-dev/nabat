@@ -28,42 +28,32 @@ import (
 )
 
 func TestAdhocInputMethodsRequireInteractiveTerminal(t *testing.T) {
+	t.Parallel()
+
 	io, _, _, _ := testIO()
 	app := MustNew("test", WithIO(io))
 	app.MustCommand("run", WithRun(func(c *Context) error {
-		if _, err := c.Input("name"); err == nil {
-			t.Fatalf("expected Input to fail in non-interactive mode")
-		}
-		// Select and MultiSelect now accept a fallback and succeed in
-		// non-interactive mode; verify they return the fallback.
+		_, err := c.Input("name")
+		require.Error(t, err, "expected Input to fail in non-interactive mode")
+
 		env, err := c.Select("env", []string{"staging", "production"}, "staging")
-		if err != nil {
-			t.Fatalf("expected Select to succeed with fallback in non-interactive mode, got: %v", err)
-		}
-		if env != "staging" {
-			t.Fatalf("expected Select to return fallback 'staging', got: %q", env)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "staging", env)
+
 		targets, err := c.MultiSelect("targets", []string{"a", "b"}, []string{"a"})
-		if err != nil {
-			t.Fatalf("expected MultiSelect to succeed with fallback in non-interactive mode, got: %v", err)
-		}
-		if len(targets) != 1 || targets[0] != "a" {
-			t.Fatalf("expected MultiSelect to return fallback [a], got: %v", targets)
-		}
-		if _, errText := c.TextInput("notes"); errText == nil {
-			t.Fatalf("expected TextInput to fail in non-interactive mode")
-		}
-		if _, errFile := c.FilePicker("config"); errFile == nil {
-			t.Fatalf("expected FilePicker to fail in non-interactive mode")
-		}
-		if _, errConfirm := c.Confirm("continue?"); errConfirm == nil {
-			t.Fatalf("expected Confirm to fail in non-interactive mode")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a"}, targets)
+
+		_, err = c.TextInput("notes")
+		require.Error(t, err, "expected TextInput to fail in non-interactive mode")
+		_, err = c.FilePicker("config")
+		require.Error(t, err, "expected FilePicker to fail in non-interactive mode")
+		_, err = c.Confirm("continue?")
+		require.Error(t, err, "expected Confirm to fail in non-interactive mode")
 		return nil
 	}))
 
-	err := Run(t, app, []string{"run"})
-	require.NoError(t, err)
+	require.NoError(t, Run(t, app, []string{"run"}))
 }
 
 // TestPromptOptionValidationAggregatesConfigErrors covers the option-validation

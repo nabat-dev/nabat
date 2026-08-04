@@ -55,21 +55,12 @@ func WithTitle(title string) spinnerStatusOption {
 	}
 }
 
-// WithColumns sets the column header labels shown above the status rows. The
-// headers cover the label column (first) and all Set() cell columns in order.
-// An "AGE" header is auto-appended for the elapsed column unless
-// [WithoutElapsed] is also set.
-//
-// When a row has fewer cells than there are headers, the missing columns
-// render as blank. When a row has more cells than there are headers, the extra
-// cells render without a header above them.
+// WithColumns sets status column headers for the label and Set() cells.
+// An "AGE" header is appended unless [WithoutElapsed] is set.
 //
 // Example:
 //
-//	c.Status(fn,
-//	    nabat.WithTitle("Events"),
-//	    nabat.WithColumns("OBJECT", "REASON", "MESSAGE"),
-//	)
+//	c.Status(fn, WithTitle("Events"), WithColumns("OBJECT", "REASON", "MESSAGE"))
 func WithColumns(names ...string) StatusOption {
 	return statusOnlyOption(func(c *statusConfig) error {
 		c.columns = append([]string(nil), names...)
@@ -104,14 +95,9 @@ func WithStatusIcons(icons Icons) StatusOption {
 	})
 }
 
-// Status is the live handle passed to the [Context.Status] callback. Call
-// [Status.Row] to add or update keyed status rows. Call [Status.SetTitle] to
-// update the header title (only meaningful when [WithTitle] was used). Call
-// [Status.SetCompletion] to control the header's completion icon.
-//
-// Row is safe to call from any goroutine. A snapshot is a consistent read of
-// all rows that existed at the time of the call; rows added after a snapshot
-// collection begins may not appear until the next render tick.
+// Status is the live handle passed to [Context.Status]. Use [Status.Row],
+// [Status.SetTitle], and [Status.SetCompletion]. Row is safe for concurrent
+// use; a snapshot may miss rows added mid-collection until the next tick.
 type Status struct {
 	mu          sync.Mutex
 	headerTitle string
@@ -147,22 +133,13 @@ func (s *Status) getTitle() string {
 	return s.headerTitle
 }
 
-// Row returns the keyed row for key, creating it on first call and returning
-// the same row on every subsequent call. Rows are displayed beneath the header
-// in creation order unless [StatusRow.Priority] is used to control sort order.
-// Row is safe to call from any goroutine.
-//
-// The key is used only for dedup; it is not shown in the display. Use
-// [StatusRow.Label] to set the visible first column.
+// Row returns the keyed row, creating it on first use. The key is for
+// dedup only; set the visible label with [StatusRow.Label]. Safe for
+// concurrent use.
 //
 // Example:
 //
-//	row := st.Row(string(ev.UID))
-//	row.Label(ev.Object).Set(ev.Reason, ev.Message).Warn()
-//
-// Later calls with the same key return the same row:
-//
-//	st.Row(string(ev.UID)).Set(ev.Reason, "updated").Success()
+//	st.Row(id).Label(obj).Set(reason, msg).Warn()
 func (s *Status) Row(key string) *StatusRow {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -190,32 +167,40 @@ func (s *Status) rowSnapshots() []rowSnapshot {
 	s.mu.Unlock()
 
 	// Separate prioritized and unprioritized visible rows.
+	// priority is copied under the row lock so sort does not race with
+	// concurrent [StatusRow.Priority] writers.
 	type indexed struct {
 		row      *StatusRow
 		insertID int
+		priority int
 	}
 	var prioritized, unprioritized []indexed
 	for i, r := range rows {
 		r.mu.Lock()
 		hidden := r.hidden
-		prio := r.priority
+		var (
+			hasPrio bool
+			prioVal int
+		)
+		if r.priority != nil {
+			hasPrio = true
+			prioVal = *r.priority
+		}
 		r.mu.Unlock()
 		if hidden {
 			continue
 		}
-		if prio != nil {
-			prioritized = append(prioritized, indexed{r, i})
+		if hasPrio {
+			prioritized = append(prioritized, indexed{r, i, prioVal})
 		} else {
-			unprioritized = append(unprioritized, indexed{r, i})
+			unprioritized = append(unprioritized, indexed{r, i, 0})
 		}
 	}
 
 	// Sort prioritized rows by priority value, preserving insertion order on ties.
 	sort.SliceStable(prioritized, func(a, b int) bool {
-		pa := *prioritized[a].row.priority
-		pb := *prioritized[b].row.priority
-		if pa != pb {
-			return pa < pb
+		if prioritized[a].priority != prioritized[b].priority {
+			return prioritized[a].priority < prioritized[b].priority
 		}
 		return prioritized[a].insertID < prioritized[b].insertID
 	})
@@ -341,32 +326,21 @@ func (s *Status) renderPlainTable(cfg *statusConfig) string {
 	return sb.String()
 }
 
-// Status runs fn while showing a live status display on stderr in interactive
-// terminals. The callback receives a [*Status] handle; call [Status.Row] to
-// add or update keyed status rows.
+// Status runs fn with a live multi-row status display on stderr.
+// On a TTY, fn runs while the UI animates; Status returns only after fn
+// returns. On cancel or ctrl+c it stops the UI, waits for fn, then returns
+// [context.Canceled] unless fn returned a non-nil error. Bad options yield
+// [*ConfigErrors].
 //
-// Each row shows its own animation and an auto-incrementing elapsed timer.
-// Calling [StatusRow.Success], [StatusRow.Error], [StatusRow.Warn], or
-// [StatusRow.Done] freezes the timer and replaces the animation with a static
-// icon.
+// Use [WithTitle], [WithColumns], and [Status.Row] to shape the display.
+// Non-TTY output is a plain title plus a final table.
 //
-// Use [WithTitle] to show an animated header line above the rows. The header
-// icon on completion is derived from the fn return value unless overridden by
-// [Status.SetCompletion].
+// Example:
 //
-// Use [WithColumns] to show column header labels above the rows. An "AGE"
-// header is auto-appended for the elapsed column unless [WithoutElapsed] is
-// also set.
-//
-// In non-TTY environments (CI, piped output), the title (if set) is printed
-// once as a plain line and the final row state prints as a plain-text aligned
-// table after fn returns.
-//
-// Errors:
-//   - any error returned by fn
-//   - [*ConfigErrors] from option validation
-//   - [context.Canceled] when the user interrupts with ctrl+c or the context
-//     is canceled
+//	return c.Status(func(st *Status) error {
+//	    st.Row("build").Set("compiling").Success()
+//	    return nil
+//	}, WithTitle("Deploy"))
 func (c *Context) Status(fn func(*Status) error, opts ...StatusOption) error {
 	cfg := &statusConfig{spinnerType: SpinnerDots()}
 	var errs ConfigErrors
@@ -405,6 +379,14 @@ func (c *Context) Status(fn func(*Status) error, opts ...StatusOption) error {
 		return fnErr
 	}
 
+	var (
+		fnErr  error
+		fnDone sync.WaitGroup
+	)
+	fnDone.Go(func() {
+		fnErr = fn(handle)
+	})
+
 	rt := c.app.Theme()
 	info := rt.Style(theme.StatusInfo)
 	activeStyle := rt.Style(theme.StatusActive)
@@ -418,7 +400,8 @@ func (c *Context) Status(fn func(*Status) error, opts ...StatusOption) error {
 		info,
 		activeStyle,
 		rt,
-		fn,
+		&fnDone,
+		&fnErr,
 	)
 
 	final, runErr := tea.NewProgram(
@@ -428,6 +411,13 @@ func (c *Context) Status(fn func(*Status) error, opts ...StatusOption) error {
 		tea.WithInput(c.io.RawIn()),
 	).Run()
 
+	// Always wait for fn, including on interrupt / program kill, so Status
+	// never returns while the worker is still running.
+	fnDone.Wait()
+
+	if fnErr != nil {
+		return fnErr
+	}
 	if m, ok := final.(statusModel); ok && m.err != nil {
 		return m.err
 	}

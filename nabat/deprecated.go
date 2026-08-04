@@ -19,15 +19,10 @@ import (
 	"strings"
 )
 
-// DeprecationOption refines the message produced by [WithDeprecated] and
-// [WithDeprecatedShorthand]. Sub-options compose into the single deprecation
-// string that Cobra/pflag prints when the deprecated symbol is used and that
-// the Nabat help renderer surfaces in --help output.
-//
-// Sub-options are intentionally narrow: cobra/pflag exposes only one
-// deprecation message per command/flag/shorthand, so the helpers in this
-// family ([WithDeprecatedSince], [WithDeprecatedReplacement]) augment that
-// string rather than introducing new runtime behavior.
+// DeprecationOption refines the message from [WithDeprecated] and
+// [WithDeprecatedShorthand]. Sub-options ([WithDeprecatedSince],
+// [WithDeprecatedReplacement]) compose into the single string cobra/pflag
+// prints and Nabat shows in --help.
 type DeprecationOption interface {
 	applyToDeprecation(*deprecationSpec) error
 }
@@ -82,15 +77,9 @@ func buildDeprecation(message string, sub []DeprecationOption) (deprecationSpec,
 	return spec, nil
 }
 
-// deprecatedOpt carries a composed deprecation message to either a command
-// or a flag. It satisfies both [CommandOption] and [FlagOption] so a single
-// value covers both call sites.
-//
-// Positional args are intentionally excluded: cobra and pflag provide no
-// deprecation hook for positionals, so accepting [WithDeprecated] inside
-// [WithArg] would compile but silently no-op at runtime. Restricting the
-// return type to `interface { CommandOption; FlagOption }` makes that misuse
-// a compile-time error.
+// deprecatedOpt carries a composed deprecation message for a command or flag.
+// It satisfies [CommandOption] and [FlagOption]. Positionals are excluded
+// because cobra/pflag have no deprecation hook for them.
 type deprecatedOpt struct {
 	spec deprecationSpec
 }
@@ -106,33 +95,16 @@ func (o deprecatedOpt) applyToFlag(s *flagSpec) error {
 	return nil
 }
 
-// WithDeprecated marks a subcommand or a flag as deprecated. cobra prints
-// the composed message when the deprecated symbol is used; the Nabat help
-// renderer also surfaces it in --help output.
+// WithDeprecated marks a subcommand or flag as deprecated. cobra prints the
+// composed message on use; Nabat also shows it in --help. Positionals are
+// unsupported (compile-time error via the return type). Sub-options compose
+// into the same message.
 //
-// The same helper covers commands and flags so callers do not have to learn
-// two parallel APIs. Positional args are NOT supported because cobra/pflag
-// expose no deprecation hook for them — passing this to [WithArg] is a
-// compile-time error rather than a silent runtime no-op.
+// Example:
 //
-// Sub-options ([WithDeprecatedSince], [WithDeprecatedReplacement]) compose
-// into the same message string; they do not introduce new runtime behavior.
-//
-// Examples:
-//
-//	app.MustCommand("legacy",
-//	    WithDeprecated("use `new-cmd` instead",
-//	        WithDeprecatedSince("v0.7.0"),
-//	    ),
-//	    WithRun(handler),
-//	)
-//
-//	WithFlag("config", "",
-//	    WithShort('c'),
-//	    WithDeprecated("use --settings instead",
-//	        WithDeprecatedReplacement("--settings"),
-//	    ),
-//	)
+//	WithDeprecated("use `new-cmd` instead", WithDeprecatedSince("v0.7.0"))
+//	WithFlag("config", "", WithDeprecated("use --settings instead",
+//	    WithDeprecatedReplacement("--settings")))
 func WithDeprecated(message string, sub ...DeprecationOption) interface {
 	CommandOption
 	FlagOption
@@ -154,21 +126,12 @@ func (o deprecatedOptErr) applyToCommand(*commandSpec) error { return o.err }
 func (o deprecatedOptErr) applyToFlag(*flagSpec) error       { return o.err }
 
 // WithDeprecatedShorthand marks a flag's shorthand as deprecated while the
-// long form (`--name`) remains current. Requires [WithShort] on the same
-// flag — that dependency is enforced at registration time in
-// [flagDef.validate].
-//
-// This helper is a top-level [FlagOption] (not a [DeprecationOption]) so the
-// "shorthand only" semantics live in the type system: passing it to anything
-// other than [WithFlag] / [WithSelectFlag] / [WithMultiSelectFlag] is a
-// compile-time error.
+// long form remains current. Requires [WithShort] on the same flag.
 //
 // Example:
 //
-//	WithFlag("config", "",
-//	    WithShort('c'),
-//	    WithDeprecatedShorthand("use --config instead of -c"),
-//	)
+//	WithFlag("config", "", WithShort('c'),
+//	    WithDeprecatedShorthand("use --config instead of -c"))
 func WithDeprecatedShorthand(message string, sub ...DeprecationOption) FlagOption {
 	spec, err := buildDeprecation(message, sub)
 	if err != nil {
@@ -181,15 +144,11 @@ func WithDeprecatedShorthand(message string, sub ...DeprecationOption) FlagOptio
 	})
 }
 
-// WithDeprecatedSince annotates a deprecation with the version (or date)
-// the symbol was deprecated. The version string is appended to the
-// deprecation message as " (since <version>)".
+// WithDeprecatedSince appends " (since <version>)" to the deprecation message.
 //
 // Example:
 //
-//	WithDeprecated("use --output instead",
-//	    WithDeprecatedSince("v0.7.0"),
-//	)
+//	WithDeprecated("use --output instead", WithDeprecatedSince("v0.7.0"))
 func WithDeprecatedSince(version string) DeprecationOption {
 	return deprecationOptionFunc(func(s *deprecationSpec) error {
 		s.since = strings.TrimSpace(version)
@@ -197,15 +156,12 @@ func WithDeprecatedSince(version string) DeprecationOption {
 	})
 }
 
-// WithDeprecatedReplacement names the symbol that should be used instead of
-// the deprecated one. The symbol is appended to the deprecation message as
-// "; use <symbol> instead".
+// WithDeprecatedReplacement appends "; use <symbol> instead" to the
+// deprecation message.
 //
 // Example:
 //
-//	WithDeprecated("legacy",
-//	    WithDeprecatedReplacement("--output"),
-//	)
+//	WithDeprecated("legacy", WithDeprecatedReplacement("--output"))
 func WithDeprecatedReplacement(symbol string) DeprecationOption {
 	return deprecationOptionFunc(func(s *deprecationSpec) error {
 		s.replacement = strings.TrimSpace(symbol)

@@ -172,3 +172,19 @@ func TestLoggingRejectsNilOption(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, logging.ErrNilOption)
 }
+
+func TestLoggingInvalidLevelFlagSurfacesError(t *testing.T) {
+	t.Parallel()
+
+	io, _, _, _ := nabattest.NewIO()
+	app := nabat.MustNew("test",
+		nabat.WithIO(io),
+		nabat.WithFlag("log-level", "info", nabat.WithPersistent()),
+		nabat.WithExtension(logging.New(logging.WithLevelFlag("log-level"))),
+	)
+	app.MustCommand("run", nabat.WithRun(func(c *nabat.Context) error { return nil }))
+
+	err := nabattest.Run(t, app, []string{"run", "--log-level", "nope"})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "invalid log-level value")
+}

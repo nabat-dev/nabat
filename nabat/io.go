@@ -23,14 +23,10 @@ import (
 )
 
 // IOStreams is the terminal I/O bundle shared by an [App] and every
-// [Context] it produces. It is an alias for [termio.Streams].
-//
-// Out and ErrOut are [*termio.Writer] values that layer color adaptation,
-// sticky-error state, and FD preservation on top of the raw stream.
-// In is the unwrapped reader passed to [NewIO] or [NewSystemIO].
-//
-// IOStreams is safe to construct concurrently with other operations but
-// not safe for concurrent mutation via the SetXxxTTY methods.
+// [Context] it produces. It is an alias for [termio.Streams]. Out and
+// ErrOut are color-adaptive [*termio.Writer] values; In is the unwrapped
+// reader. Safe to construct concurrently, but not for concurrent SetXxxTTY
+// mutation.
 type IOStreams = termio.Streams
 
 // DefaultWidth is the terminal column width assumed when the underlying
@@ -52,11 +48,8 @@ func NewSystemIO() *IOStreams {
 }
 
 // NewIO returns an IOStreams over the supplied streams. Out and ErrOut are
-// wrapped with a color-adaptive writer; In is passed through unchanged.
-//
-// Pass *[os.File] values for production code (TTY detection works against
-// the real file descriptor). For tests prefer [nabattest.NewIO], which also
-// returns the underlying buffers for assertion.
+// color-adaptive; In is unchanged. Pass *[os.File] for real TTY detection;
+// in tests prefer [nabattest.NewIO].
 func NewIO(in io.Reader, out, errOut io.Writer) *IOStreams {
 	env := os.Environ()
 	return termio.New(in, out, errOut,

@@ -27,25 +27,12 @@ import (
 	xterm "github.com/charmbracelet/x/term"
 )
 
-// detectCapabilities builds a [theme.Capabilities] snapshot of the
-// rendering surface from an [IOStreams] bundle and the pre-detected color
-// profile. Themes branch on the result to pick capability-aware colors,
-// choose the right glamour preset, and back off when the stream is plain text.
-//
-// detectCapabilities lives in the nabat root because it depends on
-// [IOStreams]; the [theme] package is a leaf and must not pull in IO.
-// Tests in the theme package construct [theme.Capabilities] directly
-// without calling this function.
-//
-// detectCapabilities returns a default-dark, no-color, non-interactive
-// snapshot when io is nil so callers do not have to nil-check on every
-// path. In practice [App.finalize] never invokes it with a nil bundle —
-// [config.validate] rejects that earlier — but defending the function
-// keeps it usable for tests and tooling.
-//
-// Detection defaults are conservative: when a fact cannot be measured
-// reliably (Width, BackgroundHex, Hyperlinks), the framework reports
-// the safer (less-feature) value rather than guessing.
+// detectCapabilities builds a [theme.Capabilities] snapshot from an
+// [IOStreams] bundle and the pre-detected color profile. It lives in nabat
+// because it depends on [IOStreams]; theme tests construct Capabilities
+// directly. A nil io yields a default-dark, no-color, non-interactive
+// snapshot. Unmeasurable facts (Width, BackgroundHex, Hyperlinks) report
+// the safer, less-featured value.
 func detectCapabilities(io *IOStreams, profile colorprofile.Profile) theme.Capabilities {
 	if io == nil {
 		return theme.Capabilities{
@@ -81,15 +68,9 @@ func detectCapabilities(io *IOStreams, profile colorprofile.Profile) theme.Capab
 	return caps
 }
 
-// detectBackgroundHex queries the terminal background color via the
-// OSC 11 helper that lipgloss already uses. It returns the
-// canonicalized "#RRGGBB" form when the query succeeds; the second
-// return value is false when the terminal does not support the query
-// or the read times out.
-//
-// Implementation detail: lipgloss exposes a [lipgloss.BackgroundColor]
-// helper that returns a [color.Color]. Empty / NoColor results
-// indicate no detection happened (terminal silent, query disabled).
+// detectBackgroundHex queries the terminal background via OSC 11
+// ([lipgloss.BackgroundColor]). It returns "#RRGGBB" on success; ok is
+// false when the terminal is silent, returns NoColor, or times out.
 func detectBackgroundHex(in, out xterm.File) (string, bool) {
 	c, err := lipgloss.BackgroundColor(in, out)
 	if err != nil || c == nil {
@@ -102,9 +83,7 @@ func detectBackgroundHex(in, out xterm.File) (string, bool) {
 }
 
 // colorHex formats a [color.Color] as the canonical "#RRGGBB" string
-// the [theme.Capabilities.BackgroundHex] field uses. It returns the
-// empty string when c is nil — the caller already screens for
-// NoColor.
+// used by [theme.Capabilities.BackgroundHex]. Returns "" when c is nil.
 func colorHex(c color.Color) string {
 	if c == nil {
 		return ""
@@ -121,14 +100,9 @@ func colorHex(c color.Color) string {
 	return string(out)
 }
 
-// detectHyperlinksFromEnv reports whether the terminal advertises
-// OSC 8 hyperlink support. There is no universal capability flag, so
-// the heuristic walks well-known TERM_PROGRAM / VTE_VERSION /
-// TERM_FEATURES indicators that mainstream terminals set.
-//
-// Conservative: when in doubt, return false. Themes / extensions
-// that emit links degrade to raw URL text in that case, which is
-// always safe.
+// detectHyperlinksFromEnv reports OSC 8 hyperlink support from
+// TERM_FEATURES, TERM_PROGRAM, and VTE_VERSION. Returns false when
+// unsure so link emitters degrade to raw URL text.
 func detectHyperlinksFromEnv() bool {
 	if v := os.Getenv("TERM_FEATURES"); v != "" {
 		for f := range strings.SplitSeq(v, ",") {
@@ -144,23 +118,15 @@ func detectHyperlinksFromEnv() bool {
 	if os.Getenv("VTE_VERSION") != "" {
 		// VTE >= 0.50 supports hyperlinks; the env var only set
 		// when VTE is the host. Treat the presence of any version
-		// as supportive — pre-0.50 VTE is rare in 2026.
+		// as supportive; pre-0.50 VTE is rare in 2026.
 		return true
 	}
 	return false
 }
 
-// detectUnicodeFromEnv reports the Unicode capability tier of the
-// terminal. Heuristic order:
-//
-//  1. Explicit env override [NABAT_UNICODE] (ascii / wide / emoji).
-//  2. LANG / LC_* containing "UTF-8" -> at least UnicodeWide.
-//  3. TERM_PROGRAM signals known to render emoji -> UnicodeEmoji.
-//  4. Fallback: UnicodeASCII (the safe choice).
-//
-// The framework's own table / tree / list paths consult this so
-// they substitute ASCII enumerators when the terminal cannot render
-// the wide glyphs.
+// detectUnicodeFromEnv reports the Unicode capability tier: NABAT_UNICODE
+// override, then LANG/LC_* UTF-8 (UnicodeWide), then TERM_PROGRAM emoji
+// hosts (UnicodeEmoji), else UnicodeASCII.
 func detectUnicodeFromEnv() theme.UnicodeLevel {
 	switch strings.ToLower(os.Getenv("NABAT_UNICODE")) {
 	case "ascii":
@@ -195,14 +161,9 @@ func detectUnicodeFromEnv() theme.UnicodeLevel {
 	return theme.UnicodeWide
 }
 
-// detectReducedMotionFromEnv reports whether the framework should
-// suppress animations. The env vars checked here mirror the
-// accessibility flags adopted by other CLI ecosystems
-// (Spectre.Console's NO_MOTION, freedesktop's REDUCE_MOTION proposal,
-// the do-not-blink convention).
-//
-// Any non-empty truthy value enables the flag; "0" / "false" / "no"
-// keep it off.
+// detectReducedMotionFromEnv reports whether animations should be
+// suppressed. Checks NABAT_REDUCED_MOTION, REDUCE_MOTION, and NO_MOTION;
+// truthy values enable it, while "0" / "false" / "no" / "off" keep it off.
 func detectReducedMotionFromEnv() bool {
 	for _, key := range []string{"NABAT_REDUCED_MOTION", "REDUCE_MOTION", "NO_MOTION"} {
 		v := strings.TrimSpace(os.Getenv(key))

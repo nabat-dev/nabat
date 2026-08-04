@@ -100,7 +100,7 @@ func TestValidateManifestRejectsUnknownHuhAdapter(t *testing.T) {
 	assert.ErrorContains(t, err, "manifest \"x\"")
 	assert.ErrorContains(t, err, "variant \"dark\"")
 	assert.ErrorContains(t, err, "\"huh\"")
-	assert.ErrorContains(t, err, "supported adapters:")
+	assert.ErrorContains(t, err, "supported:")
 }
 
 // TestValidateManifestRejectsBadVariantKey covers the variant-enum

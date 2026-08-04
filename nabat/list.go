@@ -21,18 +21,9 @@ import (
 	"nabat.dev/theme"
 )
 
-// Enumerator presets for use with [WithListEnumerator].
-// These are aliases for lipgloss list enumerators, so callers do not need to
-// import the list package directly.
-//
-// Available presets:
-//
-//   - [ListBullet] — bullet point (•) (default)
-//   - [ListDash] — dash (-)
-//   - [ListAsterisk] — asterisk (*)
-//   - [ListNumbered] — numbered (1. 2. 3.)
-//   - [ListRoman] — Roman numerals (I. II. III.)
-//   - [ListAlphabet] — alphabetical (A. B. C.)
+// Enumerator presets for [WithListEnumerator] (aliases for lipgloss list
+// enumerators): [ListBullet] (default), [ListDash], [ListAsterisk],
+// [ListNumbered], [ListRoman], [ListAlphabet].
 var (
 	ListBullet   = list.Bullet
 	ListDash     = list.Dash
@@ -60,21 +51,12 @@ type listConfig struct {
 	enumStyleFn list.StyleFunc
 }
 
-// ListOption configures the [Context.List] output method.
-// Pass one or more options to customize the enumerator and styling.
-//
-// Example:
-//
-//	c.List(items,
-//		WithListEnumerator(ListNumbered),
-//		WithListItemStyle(lipgloss.NewStyle().Bold(true)),
-//	)
+// ListOption configures [Context.List] (enumerator and styling).
 type ListOption func(*listConfig)
 
 // WithListEnumerator sets the enumerator used to prefix each list item.
-// Pass one of the ListBullet, ListDash, ListNumbered, ListRoman, or
-// ListAlphabet presets, or a custom [ListEnumerator] function.
-// The default is [ListBullet].
+// Defaults to [ListBullet]; also see ListDash, ListNumbered, ListRoman, and
+// ListAlphabet.
 //
 // Example:
 //
@@ -94,17 +76,8 @@ func WithListItemStyle(s lipgloss.Style) ListOption {
 	return func(c *listConfig) { c.itemStyle = s }
 }
 
-// WithListItemStyleFunc sets a per-item style function.
-// When set, it overrides [WithListItemStyle].
-//
-// Example:
-//
-//	WithListItemStyleFunc(func(_ ListItems, i int) lipgloss.Style {
-//		if i == 0 {
-//			return lipgloss.NewStyle().Bold(true)
-//		}
-//		return lipgloss.NewStyle()
-//	})
+// WithListItemStyleFunc sets a per-item style. When set, it overrides
+// [WithListItemStyle].
 func WithListItemStyleFunc(fn list.StyleFunc) ListOption {
 	return func(c *listConfig) { c.itemStyleFn = fn }
 }
@@ -120,33 +93,18 @@ func WithListEnumeratorStyle(s lipgloss.Style) ListOption {
 	return func(c *listConfig) { c.enumStyle = s }
 }
 
-// WithListEnumeratorStyleFunc sets a per-item enumerator style function.
-// When set, it overrides [WithListEnumeratorStyle].
-//
-// Example:
-//
-//	WithListEnumeratorStyleFunc(func(_ ListItems, i int) lipgloss.Style {
-//		if i == 0 {
-//			return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF79C6"))
-//		}
-//		return lipgloss.NewStyle()
-//	})
+// WithListEnumeratorStyleFunc sets a per-item enumerator style. When set, it
+// overrides [WithListEnumeratorStyle].
 func WithListEnumeratorStyleFunc(fn list.StyleFunc) ListOption {
 	return func(c *listConfig) { c.enumStyleFn = fn }
 }
 
-// List prints a styled list to the command's output writer.
-// It applies the current [Theme] list styles by default. Pass [ListOption]
-// values to override the enumerator or styling.
+// List prints a styled list to the command's output writer. Theme styles apply
+// by default; pass [ListOption] values to override.
 //
 // Example:
 //
-//	c.List([]string{"Foo", "Bar", "Baz"})
-//
-//	c.List(items,
-//		WithListEnumerator(ListRoman),
-//		WithListEnumeratorStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF79C6"))),
-//	)
+//	c.List([]string{"Foo", "Bar"}, WithListEnumerator(ListNumbered))
 func (c *Context) List(items []string, opts ...ListOption) {
 	rt := c.app.Theme()
 	cfg := &listConfig{

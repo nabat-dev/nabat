@@ -46,7 +46,7 @@ type config struct {
 	//
 	// Stored as [theme.Resolver] (interface) so [theme.Theme] (the common
 	// declarative form) and bespoke programmatic resolvers both fit
-	// without an extra union type. nil means no theme — finalize uses
+	// without an extra union type. nil means no theme; finalize uses
 	// the zero ResolvedTheme in that case, which renders as terminal
 	// defaults.
 	//
@@ -137,21 +137,9 @@ func defaultConfig() (*config, error) {
 	}, nil
 }
 
-// finalize resolves the configured theme [Resolver] against the IO
-// bundle's detected [theme.Capabilities] and stores the resulting
-// [theme.ResolvedTheme] on the config. It runs once during [New],
-// after option application, before any command or extension can
-// observe Theme(). Calling finalize after construction is a no-op
-// aside from re-detecting capabilities, which never change for the
-// lifetime of an [App].
-//
-// Errors:
-//   - Per-palette [theme.Palette.GlamourFor] callbacks may fail when
-//     the inline manifest glamour block produces an invalid config
-//     against the live capabilities. The error is surfaced through
-//     [theme.Theme.ResolveErr] when the resolver is a [theme.Theme],
-//     wrapped with the theme name. Bespoke [theme.Resolver] implementations
-//     have no error channel; their Resolve method must self-handle.
+// finalize resolves the theme against detected [theme.Capabilities]
+// during [New]. For a [theme.Theme], errors come from [theme.Theme.ResolveErr];
+// other [theme.Resolver] values have no error channel.
 func (c *config) finalize() error {
 	caps := detectCapabilities(c.io, c.outProfile)
 
@@ -170,7 +158,7 @@ func (c *config) finalize() error {
 			// Bespoke resolvers self-resolve; we cannot apply
 			// per-Palette overrides into an opaque Resolver without
 			// breaking its contract. Surface this as a no-op
-			// silently — the user opted into a custom resolver and
+			// silently; the user opted into a custom resolver and
 			// the override path is for the declarative Theme case.
 			resolved = c.theme.Resolve(caps)
 		}
@@ -184,16 +172,9 @@ func (c *config) finalize() error {
 	return nil
 }
 
-// checkThemeRequirements runs the requirement validation declared by
-// core consumers and by every installed [ExtensionWithRequirements].
-// In strict mode the result is returned as a hard error so [New]
-// fails closed; otherwise the diagnostic is rendered to
-// [IOStreams.ErrOut] and construction continues.
-//
-// The split between warn and error matches the plan: opinionated
-// minimal themes that intentionally drop slots should still install
-// cleanly by default; tests and CLIs that want the regression catch
-// opt in via [WithStrictThemeRequirements].
+// checkThemeRequirements validates core and [ExtensionWithRequirements]
+// token needs. Warns on [IOStreams.ErrOut] by default; fails [New] when
+// [WithStrictThemeRequirements] is set.
 func (c *config) checkThemeRequirements() error {
 	reqs := append([]theme.Requirement(nil), theme.CoreRequirements()...)
 	for _, ext := range c.extensions {
@@ -232,22 +213,11 @@ func (c *config) validate() error {
 	return nil
 }
 
-// Option configures an [App] during construction with [New] or [MustNew].
-//
-// Three categories of values satisfy Option:
-//
-//   - App-level options like [WithTheme], [WithIO], [WithLogger],
-//     [WithExtension], [WithVersion], the With(out)Help* family.
-//   - [RootOption] values, which configure the root command directly
-//     ([WithDescription], [WithRun], [WithFlag], [WithArg], etc.).
-//   - [WithCommand], which registers a subcommand under the root.
-//
-// Passing a [CommandOption] that is not a [RootOption] (such as [WithGroup],
-// [WithHidden], [WithAliases], [WithTypoHints]) to [New] is a build error:
-// those options have no meaningful effect on the root command. They remain
-// valid inside [WithCommand] for nested subcommands.
-//
-// Passing a nil [Option] to [New] returns [ErrNilOption].
+// Option configures an [App] in [New] or [MustNew]. App-level options,
+// [RootOption] values, and [WithCommand] all satisfy Option.
+// A [CommandOption] that is not a [RootOption] (for example [WithHidden])
+// is a build error at the root; use it inside [WithCommand].
+// A nil Option yields [ErrNilOption].
 type Option interface {
 	applyToConfig(*config) error
 }
@@ -261,11 +231,8 @@ type optionFn func(*config) error
 func (f optionFn) applyToConfig(c *config) error { return f(c) }
 
 // AppOptions composes multiple [Option] values into one. Options apply in slice
-// order.
-//
-// Errors:
-//   - [ErrNilOption]: a nil entry appears in opts
-//   - errors from individual options
+// order. A nil entry returns [ErrNilOption]; other failures come from the
+// individual options.
 func AppOptions(opts ...Option) Option {
 	return optionFn(func(c *config) error {
 		for i, o := range opts {
@@ -280,33 +247,17 @@ func AppOptions(opts ...Option) Option {
 	})
 }
 
-// WithTheme installs the named built-in theme from the embedded catalog
-// (see [nabat.dev/theme] for the available names). Use the untyped
-// string constants in [theme] for IDE autocomplete and a build-time
-// guarantee that the spelling matches an embedded manifest:
+// WithTheme installs a built-in theme by name (see [nabat.dev/theme]).
+// Prefer theme constants such as [theme.Dracula]. Plain strings from flags
+// or env vars also work. Later [WithTheme] or [WithCustomTheme] calls win;
+// use [WithThemeOverride] for per-token tweaks.
+//
+// Example:
 //
 //	New("myctl", WithTheme(theme.Dracula))
 //
-// Plain strings work too — pass a flag value, env var, or user-supplied
-// configuration directly:
-//
-//	name := os.Getenv("MYCTL_THEME")
-//	if name == "" { name = theme.Default }
-//	New("myctl", WithTheme(name))
-//
-// [WithTheme] and [WithCustomTheme] compose: the last one wins.
-// Multiple calls do not error; the override slot
-// [WithThemeOverride] handles per-token tweaks without forcing the
-// caller to construct a derived theme by hand.
-//
-// Errors:
-//   - The theme name is not in the embedded catalog. The error joins
-//     into the [*ConfigErrors] returned by [New] and lists every
-//     available name so the caller (or end user) can correct the
-//     typo.
-//
-// For a programmatic theme that does not live as a manifest, use
-// [WithCustomTheme].
+// An unknown name fails and is joined into [*ConfigErrors] from [New],
+// with the list of available names.
 func WithTheme(name string) Option {
 	return optionFn(func(c *config) error {
 		t, err := theme.Get(name)
@@ -318,38 +269,15 @@ func WithTheme(name string) Option {
 	})
 }
 
-// WithCustomTheme installs a programmatically-defined [theme.Resolver].
-// Use this when a theme cannot be expressed as a JSON manifest — for
-// example, when it ships an owned [chroma.Style] or a closure-based
-// [huh.Theme] that depends on values not available at manifest-load
-// time. The common case (a fully-declared [theme.Theme] struct) just
-// passes the value directly because [theme.Theme] satisfies
-// [theme.Resolver]:
+// WithCustomTheme installs a programmatic [theme.Resolver].
+// A [theme.Theme] value works directly. Later [WithTheme] or
+// [WithCustomTheme] calls win; prefer [WithThemeOverride] for one-off tokens.
 //
-//	acme := theme.Theme{
-//	    Name:    "acme",
-//	    Default: theme.VariantDark,
-//	    Variants: map[theme.Variant]theme.Palette{
-//	        theme.VariantDark: {
-//	            Tokens:  acmeTokens,
-//	            Chroma:  acmeChromaStyle,
-//	            Glamour: acmeGlamourStyle,
-//	            Huh:     acmeHuhTheme,
-//	        },
-//	    },
-//	}
-//	app, _ := nabat.New("myctl", nabat.WithCustomTheme(acme))
+// Example:
 //
-// The rare case (a Resolver whose palette choice depends on runtime
-// [theme.Capabilities] in a way one Variant per Palette cannot
-// express) implements [theme.Resolver] directly and passes that.
+//	app, err := nabat.New("myctl", nabat.WithCustomTheme(acmeTheme))
 //
-// [WithCustomTheme] composes with [WithTheme]: the last call wins.
-// Per-token tweaks should reach for [WithThemeOverride] instead of
-// constructing a derived [theme.Theme] for one slot.
-//
-// Errors:
-//   - [ErrNilOption]: r is nil.
+// It returns [ErrNilOption] if r is nil.
 func WithCustomTheme(r theme.Resolver) Option {
 	return optionFn(func(c *config) error {
 		if r == nil {
@@ -360,28 +288,16 @@ func WithCustomTheme(r theme.Resolver) Option {
 	})
 }
 
-// WithThemeOverride registers a per-token style override applied on
-// top of the active theme at finalize time. Multiple calls compose:
-// later overrides for the same token win, overrides on different
-// tokens stack.
+// WithThemeOverride applies a per-token style on top of the active theme.
+// Later calls for the same token win. Overrides apply to every variant of a
+// [theme.Theme]; they are ignored for opaque [theme.Recipe] resolvers.
 //
-// The common use case is "use the bundled theme, but with my brand
-// color":
+// Example:
 //
-//	app, _ := nabat.New("myctl",
+//	nabat.New("myctl",
 //	    nabat.WithTheme(theme.Dracula),
 //	    nabat.WithThemeOverride(theme.StatusError, magenta),
 //	)
-//
-// Overrides apply to every variant of the underlying theme, so a
-// multi-variant manifest stays multi-variant after the override —
-// the same one-line tweak affects whichever variant the runtime
-// capabilities pick.
-//
-// Overrides are silently ignored when the active theme is a bespoke
-// [theme.Recipe] (anything other than a [theme.Theme] value); the
-// recipe's Resolve method is opaque, so the framework cannot
-// meaningfully apply per-Palette overrides into it.
 func WithThemeOverride(t theme.Token, s lipgloss.Style) Option {
 	return optionFn(func(c *config) error {
 		c.themeOverrides = append(c.themeOverrides, theme.SetToken(t, s))
@@ -389,17 +305,9 @@ func WithThemeOverride(t theme.Token, s lipgloss.Style) Option {
 	})
 }
 
-// WithThemeOverrides registers a batch of [theme.Override] mutations
-// — useful for callers that want to apply more than one slot in one
-// call (chroma swap plus a token tweak, for example) or that want
-// to drop in an override produced by another helper such as
-// [theme.SetAlias] or [theme.SetChroma].
-//
-// Overrides apply in slice order; the same composition rules
-// described on [WithThemeOverride] apply.
-//
-// Errors:
-//   - [ErrNilOption]: one of the overrides entries is nil.
+// WithThemeOverrides applies several [theme.Override] values in order.
+// Same composition rules as [WithThemeOverride]. A nil entry returns
+// [ErrNilOption].
 func WithThemeOverrides(overrides ...theme.Override) Option {
 	return optionFn(func(c *config) error {
 		for i, o := range overrides {
@@ -412,19 +320,10 @@ func WithThemeOverrides(overrides ...theme.Override) Option {
 	})
 }
 
-// WithStrictThemeRequirements promotes the framework's
-// theme-requirement warning into a hard error returned from [New].
-// Without this option, the App writes a multi-line diagnostic to
-// [IOStreams.ErrOut] when an installed theme misses
-// tokens declared by core consumers or by an
-// [ExtensionWithRequirements]; with it, the same diagnostic
-// becomes a [*ConfigErrors] entry and construction fails.
-//
-// Use case: tests that assert "this theme covers everything we
-// need" — flip the option and let the framework's check do the
-// regression catching for you. Production CLIs typically leave it
-// off so an opinionated minimal theme can still ship without
-// breaking apps that picked it.
+// WithStrictThemeRequirements turns missing theme-token warnings into a
+// hard [*ConfigErrors] failure from [New]. Without it, the App only prints
+// a diagnostic to stderr. Useful in tests; leave off in production if a
+// minimal theme is intentional.
 func WithStrictThemeRequirements() Option {
 	return optionFn(func(c *config) error {
 		c.strictThemeRequirements = true
@@ -488,17 +387,9 @@ func WithErrorHandler(fn func(error)) Option {
 	})
 }
 
-// WithLogger sets the structured logger returned by [Context.Logger] during
-// command invocations. Pass any [*slog.Logger]; Nabat treats it as opaque.
-//
-// Use this when you want to bring your own logger. As an alternative, install
-// the logging plugin via [WithExtension] for an opinionated styled charm logger
-// with --verbose / --log-level flag wiring.
-//
-// When neither WithLogger nor the logging plugin is used, [Context.Logger]
-// returns a discard logger that silently drops all records.
-//
-// Passing a nil [*slog.Logger] returns [ErrNilOption].
+// WithLogger sets the [*slog.Logger] returned by [Context.Logger].
+// Without this or the logging extension, Logger discards records.
+// Nil returns [ErrNilOption].
 func WithLogger(l *slog.Logger) Option {
 	return optionFn(func(c *config) error {
 		if l == nil {
@@ -509,28 +400,14 @@ func WithLogger(l *slog.Logger) Option {
 	})
 }
 
-// App is the root CLI application for a single binary.
+// App is the root CLI for one binary.
+// Construct it with [New] or [MustNew], declare commands with [WithCommand]
+// or [App.Command], and run with [App.Run].
 //
-// It owns the underlying Cobra root command, global configuration, installed
-// extensions (see [WithExtension]), and the cached color profile used for output.
-//
-// Construct an App with [New] or [MustNew]. Pass [Option] values to configure
-// it: app-level options ([WithTheme], [WithIO], [WithLogger], [WithExtension],
-// [WithVersion], the With(out)Help* family), [RootOption] values to configure
-// the root command directly ([WithDescription], [WithFlag], [WithRun], etc.),
-// and [WithCommand] to declare subcommands. The entire command tree can be
-// declared in one call to [New]; every registration error aggregates into the
-// returned error. For runtime/dynamic registration, use [App.Command] (returns
-// `(*Command, error)`) or [App.MustCommand] (panics on failure). Run the
-// program with [App.Run].
-//
-// An App is safe to use from multiple goroutines only AFTER registration is
-// complete. All command and flag registration — including extensions calling
-// [App.Command] or [App.MustCommand] from inside [Extension.Init] — must
-// happen before [App.Run] (or [App.RunArgs]) is invoked, and before any
-// goroutine forks. Concurrent registration is not supported. Calls to
-// [App.Command] / [Command.Command] after [App.Run] return an error;
-// [App.MustCommand] / [Command.MustCommand] panic with the same message.
+// Register all commands and flags before [App.Run] or [App.RunArgs]. After
+// Run, further [App.Command] calls return [ErrRegistrationFrozen]. Concurrent
+// registration is not supported; the App is safe for concurrent use only
+// after registration finishes.
 type App struct {
 	cfg *config
 
@@ -563,6 +440,15 @@ type App struct {
 func (a *App) addMeta(cmd *cobra.Command, spec *commandSpec) {
 	a.mu.Lock()
 	a.meta[cmd] = spec
+	a.mu.Unlock()
+}
+
+// rollbackCommand undoes [parent.AddCommand] and [App.addMeta] when a
+// [WithCommandInit] hook fails after the child was registered.
+func (a *App) rollbackCommand(parent, cmd *cobra.Command) {
+	parent.RemoveCommand(cmd)
+	a.mu.Lock()
+	delete(a.meta, cmd)
 	a.mu.Unlock()
 }
 
@@ -604,39 +490,18 @@ type AppSurface interface {
 	UnsafeRoot() *cobra.Command
 }
 
-// Extension contributes subcommands, hooks, or a logger to an [App] during
-// construction. Extensions are installed via [WithExtension] and their [Init]
-// method runs inside [New] after the root command and core features (help,
-// version, completion) are wired up.
-//
-// First-party extensions live under nabat.dev subpackages (manpage, logging)
-// and are constructed by their package's New() function, which returns
-// (Extension, error). Third-party extensions follow the same pattern.
-//
-// # Invariant
-//
-// Extensions install subcommands (via [AppSurface.Command]) and global hooks
-// (via [AppSurface.OnPreRun]), and may set the logger (via
-// [AppSurface.SetLogger]). They MUST NOT modify the root command or any
-// command they did not create.
-//
-// [fmt.Stringer] is required so error messages can identify the extension by
-// name.
+// Extension adds subcommands, hooks, or a logger during [New] via
+// [WithExtension]. Init runs after help, version, and completion are wired.
+// Extensions may use [AppSurface.Command], [AppSurface.OnPreRun], and
+// [AppSurface.SetLogger], but must not modify the root or commands they
+// did not create. [fmt.Stringer] names the extension in errors.
 type Extension interface {
 	fmt.Stringer
 	Init(AppSurface) error
 }
 
-// AsExtension returns an [Option] that registers an inline extension.
-// fn runs in declaration order with other extensions, after help, version, and
-// completion are registered on the root command.
-//
-// This is the inline alternative to implementing the [Extension] interface. For
-// third-party extensions built as separate packages, use [WithExtension] with
-// the package's New() constructor instead.
-//
-// Errors:
-//   - [ErrNilOption]: fn is nil.
+// AsExtension registers an inline extension that runs fn during [New].
+// Prefer [WithExtension] for packaged extensions. Nil fn returns [ErrNilOption].
 func AsExtension(name string, fn func(AppSurface) error) Option {
 	return optionFn(func(c *config) error {
 		if fn == nil {
@@ -656,52 +521,26 @@ func (e inlineExtension) String() string { return e.name }
 
 func (e inlineExtension) Init(a AppSurface) error { return e.fn(a) }
 
-// ExtensionWithRequirements is an optional sub-interface for
-// extensions that read tokens from [theme.ResolvedTheme]. The
-// framework collects the [theme.Requirement] every implementing
-// extension declares and validates it against the active resolved
-// theme at App.finalize time.
-//
-// Extensions that don't read tokens (a man-page generator that only
-// writes roff, for example) leave this method off. Extensions that
-// do read tokens implement it so the App can surface "your theme is
-// missing the slots my extension needs" diagnostics before the user
-// hits the unstyled output:
-//
-//	func (e *Extension) ThemeRequires() theme.Requirement {
-//	    return theme.Require("logging extension",
-//	        theme.StatusInfo, theme.StatusWarning, theme.StatusError,
-//	        theme.AccentPrimary, theme.TextPrimary,
-//	    )
-//	}
-//
-// The check is warn-by-default (writes to [IOStreams.ErrOut]
-// at App construction time) so an opinionated minimal theme that
-// intentionally omits some tokens does not break apps. Pass
-// [WithStrictThemeRequirements] to promote the warning into a
-// [*ConfigErrors] entry that blocks construction.
+// ExtensionWithRequirements is an [Extension] that declares theme tokens
+// it reads. [New] warns (or fails with [WithStrictThemeRequirements]) when
+// the active theme is missing those tokens.
 type ExtensionWithRequirements interface {
 	Extension
 	ThemeRequires() theme.Requirement
 }
 
-// WithExtension installs an [Extension]. Extensions run in declaration order
-// inside [New], after the root command, help, version, and completion are
-// configured. Later extensions can observe state set by earlier ones.
+// WithExtension installs an [Extension] during [New], in declaration order.
+// Pass the (Extension, error) pair from constructors such as manpage.New.
 //
-// WithExtension accepts the (Extension, error) pair returned by extension
-// constructors (e.g. manpage.New(), logging.New()) so the construction error
-// flows directly into New's [*ConfigErrors] without a separate error check:
+// Example:
 //
 //	New("myctl",
 //	    WithExtension(manpage.New()),
-//	    WithExtension(logging.New(logging.WithVerboseFlag("verbose"))),
+//	    WithExtension(logging.New()),
 //	)
 //
-// Errors:
-//   - err is non-nil: the constructor error is forwarded as-is.
-//   - ext is nil (and err is nil): [ErrNilOption].
-//   - errors from [Extension.Init] cause [New] to return immediately.
+// A non-nil constructor err is returned as-is. A nil ext returns
+// [ErrNilOption]. [Extension.Init] failures surface from [New].
 func WithExtension(ext Extension, err error) Option {
 	return optionFn(func(c *config) error {
 		if err != nil {
@@ -715,39 +554,23 @@ func WithExtension(ext Extension, err error) Option {
 	})
 }
 
-// SetLogger installs the structured logger returned by [Context.Logger] during
-// command invocations. This is the plugin-facing setter; user code should
-// generally use [WithLogger] at construction time instead.
-//
-// Calling SetLogger after [WithLogger] replaces the previously installed
-// logger.
-// Passing nil resets to the discard logger returned by [Context.Logger] when no
-// logger is configured.
-//
-// SetLogger is not safe for concurrent use and must be called before [App.Run].
-// Extensions install their logger from [Extension.Init], which runs inside
-// [New] before any command can execute.
+// SetLogger sets the logger returned by [Context.Logger]. Prefer [WithLogger]
+// at construction. Nil resets to discard. Not safe for concurrent use; call
+// before [App.Run] (extensions typically set it from [Extension.Init]).
 func (a *App) SetLogger(l *slog.Logger) {
 	a.cfg.logger = l
 }
 
-// UnsafeRoot returns the underlying [*cobra.Command] for the App's root.
-// This is an escape hatch for operations that Nabat does not abstract
-// (e.g. Cobra completion generators, command tree traversal for man page
-// rendering). Prefer [App.Command], [App.MustCommand], and the App-level
-// options ([WithVersion], the With(out)Help* family) for standard
-// use.
+// UnsafeRoot returns the root [*cobra.Command] for escape-hatch use
+// (completion generators, man-page traversal). Prefer [App.Command] and
+// App-level options for standard work.
 func (a *App) UnsafeRoot() *cobra.Command {
 	return a.root
 }
 
-// Theme returns the resolved theme installed via [WithTheme] or
-// [WithCustomTheme] (or the built-in default if neither was used). The
-// returned [theme.ResolvedTheme] is immutable; consumers query it by
-// [theme.Token] for [lipgloss.Style] values, or by accessor for the
-// chroma name, glamour name, [huh.Theme], list enumerator, and table
-// border. Extensions read from this same value via the public method —
-// they should never reach into [App.cfg].
+// Theme returns the immutable [theme.ResolvedTheme] from [WithTheme],
+// [WithCustomTheme], or the built-in default. Query by [theme.Token] or
+// accessors; do not read [App] internals.
 func (a *App) Theme() theme.ResolvedTheme {
 	return a.cfg.resolvedTheme
 }
@@ -769,15 +592,9 @@ func (a *App) IO() *IOStreams {
 	return a.io
 }
 
-// NewBareContext returns a [*Context] wired to the app's current [IOStreams]
-// and theme, without resolved args, flags, or command binding.
-//
-// Use it when you need themed output or Context helpers outside a [RunFunc],
-// for example shutdown hooks, background work, or unit tests that exercise
-// helpers such as [Context.Badge], [Context.Fields], or
-// [Context.HighlightString]. Prefer [nabattest.Context] in tests; it wraps
-// this method and binds the underlying [context.Context] to the test
-// lifecycle.
+// NewBareContext returns a [*Context] with the app's [IOStreams] and theme,
+// but no resolved args, flags, or command. Use for themed helpers outside a
+// [RunFunc]. In tests prefer [nabattest.Context].
 func (a *App) NewBareContext() *Context {
 	if a == nil {
 		return nil
@@ -799,15 +616,9 @@ func (a *App) NewBareContext() *Context {
 	return ctx
 }
 
-// OnPreRun registers a global pre-run hook that fires before every command's
-// handler, in registration order. Global hooks run before the command's own
-// preRun hooks. The framework manages ordering; extensions never need to
-// chain hooks manually.
-//
-// If the hook returns [ErrHandled], the command handler and remaining hooks
-// are skipped and [App.Run] returns nil (success).
-//
-// Returns [ErrNilOption] if fn is nil.
+// OnPreRun registers a global pre-run hook before every command handler
+// (before command-level preRun). [ErrHandled] skips the handler and remaining
+// hooks; [App.Run] returns nil. It returns [ErrNilOption] if fn is nil.
 func (a *App) OnPreRun(fn func(*Context) error) error {
 	if fn == nil {
 		return fmt.Errorf("%w: OnPreRun: fn cannot be nil", ErrNilOption)
@@ -819,25 +630,19 @@ func (a *App) OnPreRun(fn func(*Context) error) error {
 }
 
 // New constructs an [App] with the given CLI name and options.
+// The name is the root command word and the default env prefix
+// (uppercased + "_") unless [WithEnvPrefix] overrides it.
 //
-// The name becomes the root command's primary word and the default environment
-// variable prefix (uppercased with a trailing underscore) unless [WithEnvPrefix]
-// overrides it.
+// Example:
 //
-// Construction order is fixed: options are applied to the config (including
-// [RootOption] values that configure the root command's spec directly), the
-// theme is resolved, the root command is built, help, version, and completion
-// are installed, root flags are registered on Cobra, and finally [Extension.Init]
-// runs for every [WithExtension] in declaration order. Errors from any phase
-// short-circuit and are returned.
+//	app, err := nabat.New("myctl",
+//	    nabat.WithTheme(theme.Dracula),
+//	    nabat.WithCommand("deploy", nabat.WithRun(deploy)),
+//	)
 //
-// Errors:
-//   - [ErrNilOption]: a nil entry appears in opts
-//   - wrapped errors from any [Option] or from root command configuration
-//   - "nabat: app name cannot be empty", stdin/stdout/stderr cannot be nil, or
-//     other messages aggregated in a *[ConfigErrors] value
-//   - errors from registering flags or validating flag definitions
-//   - "nabat: extension <name>: ..." when an [Extension.Init] returns an error
+// It may return [ErrNilOption], [*ConfigErrors] (empty name, nil IO, and
+// similar), option/root config failures, flag registration errors, or
+// extension Init errors.
 func New(name string, opts ...Option) (*App, error) {
 	cfg, cfgErr := defaultConfig()
 	if cfgErr != nil {
@@ -1072,21 +877,9 @@ func validateUniqueNames(spec *commandSpec, commandPath string) error {
 	return nil
 }
 
-// renderMarkdown renders content as markdown using glamour in TTY mode,
-// or returns the raw content when output is not a terminal.
-//
-// Style selection precedes glamour.NewTermRenderer:
-//
-//  1. Output is not a terminal -> "notty" preset (plain text).
-//  2. [theme.ResolvedTheme.Glamour] returns a *ansi.StyleConfig
-//     (already folded by [theme.Theme.Resolve] from the owned-style /
-//     named-preset / capability-default cascade) -> WithStyles uses it
-//     directly.
-//  3. Otherwise -> the "dark" literal here is the last-resort branch
-//     for code that constructs an empty ResolvedTheme directly. In a
-//     normally-built App, [theme.Theme.Resolve] always populates the
-//     glamour slot to at least the variant default, so this branch is
-//     unreachable.
+// renderMarkdown renders markdown with glamour on a TTY, or returns
+// content unchanged otherwise. Style order: notty, [theme.ResolvedTheme.Glamour],
+// then the "dark" preset as a last resort for an empty ResolvedTheme.
 func (a *App) renderMarkdown(content string) string {
 	if content == "" {
 		return ""
@@ -1134,27 +927,12 @@ func MustNew(name string, opts ...Option) *App {
 	return a
 }
 
-// Command creates a direct subcommand under the app's root command.
-//
-// Returns the new command and a non-nil error if registration fails (empty
-// name, nil [CommandOption], invalid options, name collisions,
-// flag-registration
-// errors, etc.). On error, no command is registered and the returned [*Command]
-// is nil — callers must handle the error before chaining further registrations.
-//
-// For aggregated registration errors (multiple commands surfaced together with
-// option errors and validation errors), declare commands with [WithCommand]
-// inside [New] instead. For panicking chains in main() or test setup, use
-// [App.MustCommand].
-//
-// Errors:
-//   - [ErrRegistrationFrozen]: called after [App.Run] / [App.RunArgs]
-//   - [ErrNilOption]: a CommandOption in opts is nil
-//   - "nabat: command name cannot be empty"
-//   - [ErrArgFlagNameCollision]: an arg and a flag share a name
-//   - errors from individual [CommandOption] application (wrapped, joined with
-//     [ErrInvalidOption] when triggered by a nil option-list entry)
-//   - errors from flag registration and command finalization
+// Command registers a subcommand under the app root.
+// On error, nothing is registered and the returned [*Command] is nil.
+// Prefer [WithCommand] inside [New] to aggregate many registration errors;
+// use [App.MustCommand] for panicking chains in main or tests.
+// It may return [ErrRegistrationFrozen], [ErrNilOption], [ErrArgFlagNameCollision],
+// or an error for an empty name or failed option/flag finalization.
 func (a *App) Command(name string, opts ...CommandOption) (*Command, error) {
 	if a.registrationFrozen.Load() {
 		return nil, ErrRegistrationFrozen
@@ -1162,15 +940,8 @@ func (a *App) Command(name string, opts ...CommandOption) (*Command, error) {
 	return a.newCommand(a.root, name, opts...)
 }
 
-// MustCommand is like [App.Command] but panics on registration failure.
-//
-// Use MustCommand in main() and test setup where chaining
-// (`app.MustCommand("cluster").MustCommand("scale", ...)`) is more readable
-// than scoped error checks. A registration error here is a programmer bug,
-// not runtime input. Mirrors the relationship between [MustNew] and [New].
-//
-// Panics if [App.Command] returns an error. See its documentation for the
-// full per-error list.
+// MustCommand is like [App.Command] but panics on failure.
+// Use in main or tests for chaining; a failure is a programmer bug.
 func (a *App) MustCommand(name string, opts ...CommandOption) *Command {
 	c, err := a.Command(name, opts...)
 	if err != nil {
@@ -1179,17 +950,11 @@ func (a *App) MustCommand(name string, opts ...CommandOption) *Command {
 	return c
 }
 
-// Run parses [os.Args] and executes the matching command using ctx as the base
-// [context.Context] for each [Context] passed to [RunFunc].
-//
-// On failure (except when help or version output was handled internally), Run
-// prints a styled error message and a usage hint to stderr before returning the
-// error, unless [WithErrorHandler] replaced that behavior.
-//
-// Errors:
-//   - errors returned by Cobra for unknown commands, usage, or flag parsing
-//   - errors from resolving positional args or flags, validation hooks, or the
-//     command handler
+// Run parses [os.Args] and executes the matching command. ctx is the base
+// [context.Context] for each [RunFunc]. On failure it prints a styled error
+// and usage hint to stderr unless [WithErrorHandler] replaced that.
+// Failures include Cobra parse/usage errors and errors from arg/flag
+// resolution, validation, or the command handler.
 func (a *App) Run(ctx context.Context) error {
 	a.registrationFrozen.Store(true)
 	cmd, err := a.root.ExecuteContextC(ctx)
@@ -1207,15 +972,8 @@ func (a *App) Run(ctx context.Context) error {
 	return err
 }
 
-// RunArgs parses args as the command line instead of [os.Args], then executes
-// the matching command using ctx as the base [context.Context].
-//
-// This is useful for tests, embedded CLIs, and programs that construct their
-// own argument lists at runtime. In tests prefer the [nabattest] package which
-// wraps
-// this method with [testing.TB] helpers.
-//
-// Errors and stderr behavior match those described on [App.Run].
+// RunArgs is like [App.Run] but takes args instead of [os.Args].
+// In tests prefer [nabattest]. Errors and stderr behavior match [App.Run].
 func (a *App) RunArgs(ctx context.Context, args ...string) error {
 	a.root.SetArgs(args)
 	defer a.root.SetArgs(nil)
@@ -1228,9 +986,7 @@ func (a *App) printError(cmd *cobra.Command, err error) {
 	}
 	out := &writer{w: a.io.ErrOut}
 	errStyle := a.cfg.resolvedTheme.Style(theme.StatusError)
-	// Strip the "nabat: " package prefix — it is useful for programmatic
-	// callers but noise for end users reading stderr.
-	msg := strings.TrimPrefix(err.Error(), "nabat: ")
+	msg := formatUserError(err)
 	rt := a.cfg.resolvedTheme
 	muted := rt.Style(theme.TextMuted)
 	accent := rt.Style(theme.AccentPrimary)
@@ -1240,6 +996,19 @@ func (a *App) printError(cmd *cobra.Command, err error) {
 		accent.Render(cmd.CommandPath()+" --help"),
 		muted.Render("for usage."),
 	)
+}
+
+// formatUserError renders err for stderr. It strips a leading "nabat: "
+// package prefix from the outermost message when present, without walking
+// wrapped causes (those stay in the formatted string for ConfigErrors and
+// similar multi-issue values).
+func formatUserError(err error) string {
+	msg := err.Error()
+	const prefix = "nabat: "
+	if after, ok := strings.CutPrefix(msg, prefix); ok {
+		return after
+	}
+	return msg
 }
 
 // runStateKey is the context key for the per-invocation [runState].
@@ -1254,23 +1023,10 @@ type runState struct {
 	handled bool
 }
 
-// attachRunE wires cmd.RunE to Nabat's per-command handler pipeline (spec
-// hooks, validation, run, post-run).
-//
-// Global pre-run hooks are NOT executed here; they fire exactly once per
-// invocation in the root's [cobra.Command.PersistentPreRunE] (set in [New]),
-// which also builds the [Context] this RunE consumes via the Cobra command's
-// context. Consequences:
-//
-//   - attachRunE is called once at command registration time and never again;
-//     extensions that add global hooks after some commands are registered are
-//     still picked up because PersistentPreRunE reads [App.globalHooks] at
-//     invocation time.
-//   - When a global hook returns [ErrHandled], PersistentPreRunE marks the
-//     run as handled and RunE short-circuits without invoking spec hooks.
-//   - When the command has no command-level handler AND no command-level
-//     hooks, RunE falls back to printing help — preserving the discovery UX
-//     for subcommands that exist only to group children.
+// attachRunE wires cmd.RunE to the per-command pipeline (hooks, validation,
+// run, post-run). Global pre-run runs in root PersistentPreRunE, which also
+// builds the [Context]. [ErrHandled] from a global hook skips this pipeline;
+// commands with no handler or hooks print help.
 func (a *App) attachRunE(cmd *cobra.Command, spec *commandSpec) {
 	hasSpecHooks := len(spec.preRun) > 0 || len(spec.validations) > 0 || len(spec.postRun) > 0
 	cmd.RunE = func(cobraCmd *cobra.Command, args []string) error {

@@ -21,38 +21,14 @@ import (
 	"time"
 )
 
-// FieldOption is the kind-checked option family for interactive prompts,
-// form fields, and declarative arg prompts. T is the bind type at the call
-// site. Misuse (e.g. [WithEditor] on a bool field) is a build error.
+// FieldOption configures interactive prompts, form fields, and arg prompts.
+// T is the bind type at the call site, so misuse such as [WithEditor] on a
+// bool field is a build error. Used by [Context.Input], [Context.Confirm],
+// [WithFormField], [WithPrompt], and related APIs.
 //
-// [FieldOption][T] is the kind-agnostic, annotation-free option family. The
-// phantom method fieldOpt(T) is the compile-time type witness. Each helper's
-// concrete type implements fieldOpt(T) only for the T values it is valid on.
-// When the user writes:
+// Example:
 //
-//	nabat.WithFormField(&proceed, "Proceed?",
-//	    nabat.WithAffirmative("Yes"),    // FieldOption[bool]
-//	    nabat.WithDefault(false),        // FieldOption[bool]  (T from false)
-//	)
-//
-// Go infers T=bool from the *bool target and verifies every option satisfies
-// FieldOption[bool]. WithAffirmative returns FieldOption[bool]; passing it to
-// a string field is a build error because its fieldOpt method only takes bool.
-// Multi-kind helpers (WithHint, WithDefault, WithValidate) use generics so
-// T is inferred from their own value argument — no annotation required.
-// Single-kind helpers (WithAffirmative, WithEditor, etc.) use concrete struct
-// types whose fieldOpt(T) is implemented only for the one valid kind.
-//
-// Most helpers produce a [FieldOption][T] with T inferred from their value
-// argument, so no explicit type annotation is needed. The handful of
-// zero-argument, single-kind helpers ([WithEditor], [WithMultiline],
-// [WithPassword], [WithAffirmative], [WithFilePicker], …) return a concrete
-// type that only satisfies [FieldOption] for the relevant kind.
-//
-// Usage contexts:
-//   - Ad-hoc prompts: [Context.Input], [Context.Confirm], [Context.Select], etc.
-//   - Form fields: [WithFormField], [WithSelectField], [WithMultiSelectField]
-//   - Declarative arg prompts: [WithPrompt]
+//	WithFormField(&proceed, "Proceed?", WithAffirmative("Yes"), WithDefault(false))
 type FieldOption[T any] interface {
 	fieldOpt(T)
 	apply(*promptConfig) error
@@ -342,16 +318,11 @@ func WithDefault[T any](v T) FieldOption[T] {
 	}}
 }
 
-// WithInitial sets the starting value shown in the interactive TTY widget.
-// T is inferred from the value: WithInitial(true) ⇒ T=bool.
-//
-// When set, WithInitial overwrites any value already stored in the target
-// pointer before the widget runs. An explicit zero (for example
-// WithInitial(0) or WithInitial(false)) is tracked via hasInitial so it is
-// distinguishable from "no initial was provided".
-//
-// WithInitial does not affect non-interactive resolution; use [WithDefault]
-// for that, or [WithPrefill] to set both.
+// WithInitial sets the starting value shown in the interactive TTY widget,
+// overwriting any value already in the target pointer. Explicit zeros
+// (WithInitial(0), WithInitial(false)) are tracked so they differ from
+// "no initial". It does not affect non-interactive resolution; use
+// [WithDefault], or [WithPrefill] for both.
 func WithInitial[T any](v T) FieldOption[T] {
 	return fieldOpt[T]{fn: func(pc *promptConfig) error {
 		pc.initial = v

@@ -21,19 +21,10 @@ import (
 	"strings"
 )
 
-// registerCompletion wires Nabat's built-in completion feature onto the root
-// command. It is called from [New] after [App.registerVersion] and before
-// user-defined root flags are registered on Cobra. The behavior is driven
-// entirely by the completion field on [config]; see completion_options.go for
-// the public option surface.
-//
-// Steps:
-//  1. If WithCompletion was not passed, leave the root untouched.
-//  2. Register a `completion` parent subcommand (name configurable, optionally
-//     hidden) carrying a persistent `--output` flag.
-//  3. For each enabled shell, register a leaf subcommand that emits the
-//     corresponding script via Cobra's generators and includes install
-//     instructions in `--help`.
+// registerCompletion wires built-in completion onto the root from
+// completionConfig (see completion_options.go). Called from [New] after
+// [App.registerVersion]. When [WithCompletion] was passed, it registers a
+// parent `completion` command (optional --output) and a leaf per enabled shell.
 func (a *App) registerCompletion() error {
 	cc := a.cfg.completion
 	if cc == nil {
@@ -132,7 +123,7 @@ func bashCompletionInstructions(name string) string {
 		"# Load in the current session:",
 		fmt.Sprintf("source <(%s completion bash)", name),
 		"",
-		"# Load for every new session — add to ~/.bashrc:",
+		"# Load for every new session: add to ~/.bashrc:",
 		fmt.Sprintf(`echo 'source <(%s completion bash)' >> ~/.bashrc`, name),
 		"",
 		"# Save directly to a file (system-wide):",
@@ -145,7 +136,7 @@ func zshCompletionInstructions(name string) string {
 		"# Load in the current session:",
 		fmt.Sprintf("source <(%s completion zsh)", name),
 		"",
-		"# Load for every new session — execute once:",
+		"# Load for every new session: execute once:",
 		`echo "autoload -U compinit; compinit" >> ~/.zshrc`,
 		fmt.Sprintf(`%s completion zsh --output "${fpath[1]}/_%s"`, name, name),
 		"",
@@ -159,7 +150,7 @@ func fishCompletionInstructions(name string) string {
 		"# Load in the current session:",
 		fmt.Sprintf("%s completion fish | source", name),
 		"",
-		"# Load for every new session — execute once:",
+		"# Load for every new session: execute once:",
 		fmt.Sprintf("%s completion fish --output ~/.config/fish/completions/%s.fish", name, name),
 	}, "\n")
 }
@@ -169,7 +160,7 @@ func powershellCompletionInstructions(name string) string {
 		"# Load in the current session:",
 		fmt.Sprintf("%s completion powershell | Out-String | Invoke-Expression", name),
 		"",
-		"# Load for every new session — add to your PowerShell profile ($PROFILE):",
+		"# Load for every new session: add to your PowerShell profile ($PROFILE):",
 		fmt.Sprintf("Add-Content $PROFILE \"`n%s completion powershell | Out-String | Invoke-Expression\"", name),
 		"",
 		"# Or save to a file and dot-source it from $PROFILE:",

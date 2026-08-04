@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package manpage provides a Nabat extension that installs a `man` subcommand
-// generating roff/man-page documentation for the entire command tree. Install it
-// with [nabat.WithExtension].
+// Package manpage provides a Nabat extension that installs a `man`
+// subcommand generating roff documentation for the command tree.
+// Install with [nabat.WithExtension].
 //
 //	import (
 //	    "nabat.dev/nabat"

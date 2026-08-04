@@ -19,37 +19,22 @@ import (
 	"reflect"
 )
 
-// Bind copies resolved positional arg and flag values into target, which must be
-// a non-nil pointer to a struct.
+// Bind copies resolved arg and flag values into target, a non-nil *struct.
+// Fields use `nabat:"name"` tags; untagged fields are skipped. Embedded
+// structs without a tag are walked recursively. Value fields always receive
+// the resolved value (including defaults). Pointer fields stay nil for
+// defaults or missing names, and are allocated only when the user supplied
+// the value (CLI, env, or prompt).
 //
-// For each exported field tagged `nabat:"name"`, Bind assigns the resolved value
-// for name when one exists. Fields without a tag are skipped. Anonymous embedded
-// structs without a nabat tag are walked recursively.
+// Example:
 //
-// Value fields (int, string, [time.Duration], …) are always assigned when a
-// value exists in the context, including registered defaults when the user did
-// not supply a value.
+//	var flags struct {
+//	    Output string `nabat:"output"`
+//	    Force  *bool  `nabat:"force"`
+//	}
+//	return c.Bind(&flags)
 //
-// Pointer fields (*int, *string, *[time.Duration], …) encode optionality: the
-// field
-// stays nil when the value was resolved only from a default or when the name was
-// never resolved. When the user supplied the value via CLI, environment variable,
-// or interactive prompt, Bind allocates a pointer and stores the resolved value.
-//
-// Errors:
-//   - "nabat: bind target: context is nil" when c is nil
-//   - "nabat: bind target must be a non-nil pointer to struct" when target is
-//     not a non-nil *struct
-//   - "nabat: bind target must be a pointer to struct" when target is not a
-//     pointer to struct
-//   - "nabat: bind field ...: field is not settable" for unexported or
-//     non-settable fields
-//   - "nabat: bind field ...: expected ..., got <nil>" when the resolved value is
-//     nil
-//   - "nabat: bind field ...: expected T, got U" when the resolved type does not
-//     assign to the field
-//   - "nabat: bind field ...: tag ... does not match any declared arg or flag"
-//     when the tag names no field on the current command (typo or stale struct)
+// It fails if the context is nil or target is not a non-nil *struct.
 func (c *Context) Bind(target any) error {
 	if c == nil {
 		return fmt.Errorf("nabat: bind target: context is nil")
@@ -67,15 +52,9 @@ func (c *Context) Bind(target any) error {
 	return c.bindStruct(rv, rv.Type(), "", c.declaredBindNames())
 }
 
-// BindAs returns the resolved value for a single arg or flag name. It is a
-// convenience for tests and one-off reads; prefer binding into a struct with
-// [Context.Bind] in command handlers.
-//
-// Errors:
-//   - "nabat: BindAs: context is nil" when c is nil
-//   - "nabat: BindAs: %q has no resolved value" when the name was not resolved
-//   - "nabat: BindAs %q: value type ... does not match requested type ..." on type
-//     mismatch
+// BindAs returns the resolved value for a single arg or flag name. Prefer
+// [Context.Bind] into a struct in command handlers. Errors on nil context,
+// missing name, or type mismatch.
 func (c *Context) BindAs[T any](name string) (T, error) {
 	var zero T
 	if c == nil {
@@ -133,7 +112,7 @@ func (c *Context) bindStruct(value reflect.Value, typ reflect.Type, prefix strin
 			if len(declared) > 0 && !declared[name] {
 				return fmt.Errorf("nabat: bind field %s: tag %q does not match any declared arg or flag", fieldPath, name)
 			}
-			continue // optional declared field not provided — struct field keeps its zero value
+			continue // optional declared field not provided; struct field keeps its zero value
 		}
 
 		resolvedValue := reflect.ValueOf(resolved)

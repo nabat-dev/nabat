@@ -23,45 +23,22 @@ import (
 	"nabat.dev/theme"
 )
 
-// Fill presets for use with [WithProgressBarFillCharacters].
-// These mirror [charm.land/bubbles/v2/progress] defaults so callers do not need
-// to import the progress package for common glyphs. Half-block is the bubbles
-// default fill rune for finer color blending than full block.
+// Fill presets for [WithProgressBarFillCharacters], mirroring bubbles defaults
+// so callers need not import the progress package.
 //
-// Available presets:
-//
-//   - [ProgressFillHalfBlock] — left half block (▌)
-//   - [ProgressFillFullBlock] — full block (█)
-//   - [ProgressEmptyLight] — light shade (░)
+//   - [ProgressFillHalfBlock]: left half block (▌)
+//   - [ProgressFillFullBlock]: full block (█)
+//   - [ProgressEmptyLight]: light shade (░)
 var (
 	ProgressFillHalfBlock = progress.DefaultFullCharHalfBlock
 	ProgressFillFullBlock = progress.DefaultFullCharFullBlock
 	ProgressEmptyLight    = progress.DefaultEmptyCharBlock
 )
 
-// ProgressBar tracks a finite number of steps and writes progress to the
-// command's stderr ([Context.IO.ErrOut]).
-//
-// Per clig.dev guidance, progress indicators belong on stderr so they do
-// not corrupt machine-readable data on stdout when the user pipes the
-// command's output. When stderr is a terminal, the bar updates in place;
-// otherwise each update prints a "[current/total]" line.
-//
-// Fill colors and percentage styling come from the active [App.Theme] when
-// stderr is a terminal and [WithoutProgressBarTheme] is not set: a blend
-// between [theme.AccentPrimary] and [theme.TextLink], empty segments use
-// [theme.TextMuted], and the numeric percentage uses [theme.TextSecondary].
-// To customize colors, use [WithTheme], [WithThemeOverride], or a custom
-// [theme.Theme] — not per-bar color arguments.
-//
-// Nabat renders with [progress.Model.ViewAs] only. Options such as
-// [WithProgressBarSpring] tune the embedded bubbles model but do not run
-// spring animation here; smooth animation requires Bubble Tea's
-// [progress.Model.Update] and frame messages.
-//
-// ProgressBar is safe for concurrent use after construction. Callers may
-// invoke [ProgressBar.Increment], [ProgressBar.Add], [ProgressBar.Set],
-// and [ProgressBar.Done] from multiple goroutines.
+// ProgressBar tracks a finite number of steps on stderr so progress does not
+// corrupt piped stdout. On a TTY the bar updates in place; otherwise each update
+// prints "[current/total]". Theme colors apply unless [WithoutProgressBarTheme]
+// is set. Safe for concurrent Increment/Add/Set/Done after construction.
 type ProgressBar struct {
 	mu      sync.Mutex
 	model   progress.Model
@@ -71,10 +48,8 @@ type ProgressBar struct {
 	tty     bool
 }
 
-// ProgressBarOption configures [Context.ProgressBar].
-//
-// Options return an error so validation failures aggregate into a [ConfigErrors]
-// at [Context.ProgressBar] call time, matching the pattern used by [FieldOption].
+// ProgressBarOption configures [Context.ProgressBar]. Option errors aggregate
+// into a [ConfigErrors] at call time.
 type ProgressBarOption func(*progressBarConfig) error
 
 type progressBarConfig struct {
@@ -97,9 +72,6 @@ type progressBarConfig struct {
 }
 
 // WithProgressBarWidth sets the character width of the bar. w must be > 0.
-//
-// Errors:
-//   - "nabat: WithProgressBarWidth: w must be > 0" when w <= 0
 func WithProgressBarWidth(w int) ProgressBarOption {
 	return func(c *progressBarConfig) error {
 		if w <= 0 {
@@ -163,14 +135,9 @@ func WithProgressBarScaledBlend(enabled bool) ProgressBarOption {
 	}
 }
 
-// WithProgressBarSpring sets frequency and damping for the bubbles progress
-// spring (see harmonica). This configures the embedded model only; Nabat does
-// not run Bubble Tea frame ticks, so the bar does not animate springs —
-// rendering uses [progress.Model.ViewAs] with your step percentage.
-//
-// Errors:
-//   - "nabat: WithProgressBarSpring: frequency must be > 0" when frequency <= 0
-//   - "nabat: WithProgressBarSpring: damping must be > 0" when damping <= 0
+// WithProgressBarSpring sets frequency and damping on the embedded bubbles
+// model. Nabat renders with [progress.Model.ViewAs] and does not run spring
+// frame ticks. Both values must be > 0.
 //
 // Example:
 //
@@ -190,27 +157,15 @@ func WithProgressBarSpring(frequency, damping float64) ProgressBarOption {
 	}
 }
 
-// ProgressBar creates a bar for total logical steps. Call [ProgressBar.Increment],
-// [ProgressBar.Add], or [ProgressBar.Set] to advance it, then [ProgressBar.Done]
-// when finished.
-//
-// total must be > 0; option errors and an invalid total are aggregated into a
-// [ConfigErrors] returned without constructing the bar.
-//
-// Errors:
-//   - "nabat: ProgressBar: total must be > 0" when total <= 0
-//   - errors returned by any [ProgressBarOption]
+// ProgressBar creates a bar for total steps (> 0). Advance with
+// [ProgressBar.Increment], [ProgressBar.Add], or [ProgressBar.Set], then
+// [ProgressBar.Done]. total <= 0 and option errors aggregate into a
+// [ConfigErrors].
 //
 // Example:
 //
 //	bar, err := c.ProgressBar(len(files))
-//	if err != nil {
-//	    return err
-//	}
-//	for _, f := range files {
-//	    process(f)
-//	    bar.Increment()
-//	}
+//	for _, f := range files { process(f); bar.Increment() }
 //	bar.Done()
 func (c *Context) ProgressBar(total int, opts ...ProgressBarOption) (*ProgressBar, error) {
 	cfg := &progressBarConfig{width: 40}

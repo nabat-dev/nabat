@@ -25,13 +25,9 @@ import (
 	"nabat.dev/nabat"
 )
 
-// NewIO returns an [nabat.IOStreams] whose three streams are *[bytes.Buffer]
-// values, suitable for use in unit tests. The buffers are returned alongside
-// the IOStreams so tests can assert on captured output without rummaging
-// through internals.
-//
-// All three streams report as non-TTY by default. Use [NewTTYIO] when a test
-// exercises the interactive code path.
+// NewIO returns an [nabat.IOStreams] backed by three *[bytes.Buffer]
+// values for unit tests. All three streams report as non-TTY; use
+// [NewTTYIO] for the interactive path.
 func NewIO() (*nabat.IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
 	in := &bytes.Buffer{}
 	out := &bytes.Buffer{}
@@ -39,8 +35,7 @@ func NewIO() (*nabat.IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
 	return nabat.NewIO(in, out, errOut), in, out, errOut
 }
 
-// NewTTYIO is like [NewIO] but reports all three streams as terminals. Use it
-// when a test exercises the interactive code path against buffer-backed streams.
+// NewTTYIO is like [NewIO] but reports all three streams as terminals.
 func NewTTYIO() (*nabat.IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) {
 	ios, in, out, errOut := NewIO()
 	ios.SetStdinTTY(true)
@@ -64,56 +59,33 @@ func WithContext(ctx context.Context) RunOption {
 	}
 }
 
-// WithEnvVars sets process environment variables for this run. The name makes
-// it obvious this manipulates process env, not CLI flag/env wiring declared
-// by [nabat.WithEnv].
-//
-// Compatibility:
-//   - With [Run] and a non-nil [testing.TB], values are applied via
-//     [testing.TB.Setenv] and restored at the end of the test. The test must
-//     NOT call [testing.T.Parallel] before [Run]; see [Run] for the panic
-//     contract.
-//   - With [Run] and a nil tb (examples), values are restored when [Run]
-//     returns.
-//   - With [RunParallel], passing this option fails fast with a clear error;
-//     parallel tests must set env before calling [testing.T.Parallel].
+// WithEnvVars sets process environment variables for this run (not
+// [nabat.WithEnv] wiring). With [Run] and a non-nil tb, uses
+// [testing.TB.Setenv] (do not call [testing.T.Parallel] first). With a
+// nil tb, restores when [Run] returns. Rejected by [RunParallel].
 func WithEnvVars(values map[string]string) RunOption {
 	return func(c *runConfig) {
 		c.env = values
 	}
 }
 
-// Run executes app with args as the command line and returns any error.
-// It is equivalent to [nabat.App.RunArgs] with test helper attribution.
-// Pass a non-nil tb so failures are attributed in test output; tb may be nil
-// for examples.
+// Run executes app with args and returns any error from [nabat.App.RunArgs].
+// Pass a non-nil tb so failures are attributed; tb may be nil for examples.
+// Use [RunParallel] after [testing.T.Parallel].
 //
-// Use [RunParallel] for tests that have called [testing.T.Parallel].
-//
-// Errors:
-//   - any error returned by [nabat.App.RunArgs] (see its documentation)
-//   - errors from saving / restoring process env when tb is nil
+// Errors include those from [nabat.App.RunArgs] and from saving or
+// restoring process env when tb is nil.
 //
 // Panics if [WithEnvVars] is supplied and the test has already called
-// [testing.T.Parallel] (the underlying [testing.TB.Setenv] panics in that
-// case so values cannot leak between parallel tests).
+// [testing.T.Parallel] ([testing.TB.Setenv] panics in that case).
 func Run(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) error {
 	return runInternal(tb, app, args, false, opts...)
 }
 
-// RunParallel is the parallel-safe sibling of [Run]. The test may call
-// [testing.T.Parallel] before invoking RunParallel.
-//
-// [WithEnvVars] is rejected at call time with a clear error so the panic
-// from [testing.TB.Setenv]-after-[testing.T.Parallel] cannot happen. Set
-// process environment with [testing.TB.Setenv] before calling
-// [testing.T.Parallel] (or use [Run] in serial tests) when env wiring is
-// required.
-//
-// Errors:
-//   - "nabattest: RunParallel does not support WithEnvVars; set env before
-//     t.Parallel or call nabattest.Run instead"
-//   - any error returned by [nabat.App.RunArgs]
+// RunParallel is like [Run] but safe after [testing.T.Parallel].
+// [WithEnvVars] is rejected; set env via [testing.TB.Setenv] before
+// Parallel, or use [Run] serially. Other failures come from
+// [nabat.App.RunArgs].
 func RunParallel(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) error {
 	return runInternal(tb, app, args, true, opts...)
 }
@@ -155,9 +127,6 @@ func runInternal(tb testing.TB, app *nabat.App, args []string, parallel bool, op
 	return app.RunArgs(cfg.ctx, args...)
 }
 
-// setProcessEnv mutates os env directly and returns a restore func. Used only
-// when [Run] has no [testing.TB] (examples); tests go through [testing.TB.Setenv]
-// so that a caller of [WithEnvVars] cannot also call [testing.T.Parallel].
 // CaptureResult holds the captured output from [Capture].
 type CaptureResult struct {
 	// Stdout is the app's stdout buffer when the app was built with [NewIO]
@@ -170,9 +139,8 @@ type CaptureResult struct {
 	Err error
 }
 
-// Capture runs app with args and returns the captured stdout/stderr buffers
-// plus any error. The app must have been constructed with [NewIO] or
-// [NewTTYIO] (via [nabat.WithIO]) so the buffers are recoverable.
+// Capture runs app with args and returns captured stdout/stderr plus any
+// error. The app must use [NewIO] or [NewTTYIO] via [nabat.WithIO].
 //
 // Example:
 //
@@ -200,13 +168,10 @@ func Capture(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) Ca
 	return result
 }
 
-// Context returns a [*nabat.Context] suitable for testing helpers that operate
-// on a Context directly (for example [nabat.Context.Badge],
-// [nabat.Context.Fields], [nabat.Context.Render]). It wraps
-// [nabat.App.NewBareContext] and binds the underlying [context.Context] to the
-// test lifecycle when tb is non-nil.
-//
-// Pass [WithContext] to set the underlying [context.Context].
+// Context returns a [*nabat.Context] for helpers that take a Context
+// directly. It wraps [nabat.App.NewBareContext] and binds the context to
+// the test lifecycle when tb is non-nil. Pass [WithContext] to set the
+// underlying [context.Context].
 //
 // Example:
 //
@@ -235,6 +200,10 @@ func Context(tb testing.TB, app *nabat.App, opts ...RunOption) *nabat.Context {
 	return c
 }
 
+// setProcessEnv mutates process env directly and returns a restore func.
+// Used only when [Run] has no [testing.TB] (examples); tests go through
+// [testing.TB.Setenv] so a caller of [WithEnvVars] can also use
+// [testing.T.Parallel].
 func setProcessEnv(values map[string]string) (func(), error) {
 	restore := make([]func(), 0, len(values))
 	undo := func() {

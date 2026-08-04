@@ -19,6 +19,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"nabat.dev/theme"
 )
@@ -104,4 +105,18 @@ func TestThemeWithAppliesAcrossVariants(t *testing.T) {
 		assert.Equal(t, override, palette.Tokens[theme.StatusError],
 			"override missing in variant %q", v)
 	}
+}
+
+func TestThemeWithPanicsOnNilOverride(t *testing.T) {
+	t.Parallel()
+
+	src := theme.Theme{
+		Name: "src",
+		Variants: map[theme.Variant]theme.Palette{
+			theme.VariantDark: {Tokens: map[theme.Token]lipgloss.Style{}},
+		},
+	}
+	require.Panics(t, func() {
+		_ = src.With(nil)
+	})
 }

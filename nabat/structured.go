@@ -55,10 +55,7 @@ func (f Format) String() string {
 
 // JSON writes v as indented JSON to [Context.IO.Out], using the active [Theme]
 // chroma style when set, or plain text when highlighting is disabled.
-//
-// Errors:
-//   - "nabat: json encoding failed: ..." when marshaling fails
-//   - errors from writing to [Context.IO.Out]
+// It fails on marshal errors or write errors to [Context.IO.Out].
 func (c *Context) JSON(v any) error {
 	b, err := Marshal(v, FormatJSON)
 	if err != nil {
@@ -68,11 +65,7 @@ func (c *Context) JSON(v any) error {
 }
 
 // YAML writes v as YAML to [Context.IO.Out], with highlighting behavior like
-// [Context.JSON].
-//
-// Errors:
-//   - "nabat: yaml encoding failed: ..." when marshaling fails
-//   - errors from writing to [Context.IO.Out]
+// [Context.JSON]. It fails on marshal errors or write errors to [Context.IO.Out].
 func (c *Context) YAML(v any) error {
 	b, err := Marshal(v, FormatYAML)
 	if err != nil {
@@ -82,11 +75,7 @@ func (c *Context) YAML(v any) error {
 }
 
 // TOML writes v as TOML to [Context.IO.Out], with highlighting behavior like
-// [Context.JSON].
-//
-// Errors:
-//   - "nabat: toml encoding failed: ..." when encoding fails
-//   - errors from writing to [Context.IO.Out]
+// [Context.JSON]. It fails on encode errors or write errors to [Context.IO.Out].
 func (c *Context) TOML(v any) error {
 	b, err := Marshal(v, FormatTOML)
 	if err != nil {
@@ -95,16 +84,13 @@ func (c *Context) TOML(v any) error {
 	return c.PrintHighlight(string(b), "toml")
 }
 
-// Encode writes v using [FormatJSON], [FormatYAML], or [FormatTOML], delegating to
-// [Context.JSON], [Context.YAML], or [Context.TOML].
+// Encode writes v using [FormatJSON], [FormatYAML], or [FormatTOML],
+// delegating to [Context.JSON], [Context.YAML], or [Context.TOML].
+// Unknown formats return an error.
 //
 // Example:
 //
 //	return c.Encode(payload, FormatJSON)
-//
-// Errors:
-//   - "nabat: unknown format %d" when f is not one of the [Format] constants
-//   - errors from the selected encoder
 func (c *Context) Encode(v any, f Format) error {
 	switch f {
 	case FormatJSON:
@@ -150,9 +136,7 @@ func (c *Context) HighlightString(code, lang string) string {
 }
 
 // FprintHighlight writes highlighted code to w using the active theme.
-//
-// Errors:
-//   - errors from writing to w
+// It returns any write error from w.
 func (c *Context) FprintHighlight(w io.Writer, code, lang string) error {
 	out := writer{w: w}
 	out.println(c.HighlightString(code, lang))
@@ -160,22 +144,14 @@ func (c *Context) FprintHighlight(w io.Writer, code, lang string) error {
 }
 
 // PrintHighlight writes highlighted code to [Context.IO.Out].
-//
-// Errors:
-//   - errors from writing to [Context.IO.Out]
+// It returns any write error from [Context.IO.Out].
 func (c *Context) PrintHighlight(code, lang string) error {
 	return c.FprintHighlight(c.io.Out, code, lang)
 }
 
 // Highlight writes code to [Context.IO.Out] using a Chroma lexer named lang.
-// When the lexer or formatter is unavailable, or when the [Theme] disables chroma,
-// it writes the original code unchanged.
-//
-// Prefer [Context.HighlightString] when you need the highlighted string without
-// writing, or [Context.FprintHighlight] to target an arbitrary writer.
-//
-// Errors:
-//   - errors from writing to [Context.IO.Out]
+// When highlighting is unavailable, it writes the original code unchanged.
+// Prefer [Context.HighlightString] or [Context.FprintHighlight] for other shapes.
 func (c *Context) Highlight(code, lang string) error {
 	return c.PrintHighlight(code, lang)
 }

@@ -121,7 +121,8 @@ func TestNewRejectsNilOption(t *testing.T) {
 
 	_, err := manpage.New(nil)
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "option at index 0 is nil")
+	assert.ErrorIs(t, err, manpage.ErrNilOption)
+	assert.ErrorContains(t, err, "option at index 0")
 }
 
 func TestNewRejectsEmptyCommandName(t *testing.T) {

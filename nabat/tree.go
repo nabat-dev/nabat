@@ -21,17 +21,9 @@ import (
 	"nabat.dev/theme"
 )
 
-// Enumerator presets for use with [WithTreeEnumerator].
-// These are aliases for lipgloss tree enumerators, so callers do not need to
-// import the tree package directly.
-//
-// Available presets:
-//
-//   - [TreeDefaultEnumerator] — classic box-drawing (├── / └──) (default)
-//   - [TreeRoundedEnumerator] — rounded box-drawing (╭── / ╰──)
-
 // TreeDefaultEnumerator returns the classic box-drawing tree enumerator
-// (├── / └──). It is the default enumerator used by [Context.Tree].
+// (├── / └──). It is the default for [Context.Tree]. Also see
+// [TreeRoundedEnumerator].
 func TreeDefaultEnumerator() TreeEnumerator { return tree.DefaultEnumerator }
 
 // TreeRoundedEnumerator returns a rounded box-drawing tree enumerator
@@ -56,24 +48,11 @@ type TreeIndenter = tree.Indenter
 // on the children set and the current index.
 type TreeStyleFunc = tree.StyleFunc
 
-// TreeNode represents a node in a tree structure.
-// Use it to build nested trees without importing the tree package directly.
-//
-// Tree construction recurses on the calling goroutine's stack; pathologically
-// deep trees (tens of thousands of levels) may overflow it. Typical CLI uses
-// (filesystem listings, dependency graphs, command trees) are unaffected.
+// TreeNode is a node in a tree for [Context.Tree].
 //
 // Example:
 //
-//	nodes := []TreeNode{
-//		{Value: ".git"},
-//		{Value: "cmd/", Children: []TreeNode{
-//			{Value: "root.go"},
-//			{Value: "serve.go"},
-//		}},
-//		{Value: "main.go"},
-//	}
-//	c.Tree("myproject", nodes)
+//	c.Tree("proj", []TreeNode{{Value: "cmd/", Children: []TreeNode{{Value: "root.go"}}}})
 type TreeNode struct {
 	Value    string
 	Children []TreeNode
@@ -92,21 +71,11 @@ type treeConfig struct {
 	width           int
 }
 
-// TreeOption configures the [Context.Tree] output method.
-// Pass one or more options to customize the enumerator, indenter, and styling.
-//
-// Example:
-//
-//	c.Tree("root", nodes,
-//		WithTreeEnumerator(TreeRoundedEnumerator()),
-//		WithTreeItemStyle(lipgloss.NewStyle().Bold(true)),
-//	)
+// TreeOption configures [Context.Tree] (enumerator, indenter, styling).
 type TreeOption func(*treeConfig)
 
 // WithTreeEnumerator sets the enumerator used to prefix each tree node.
-// Pass one of [TreeDefaultEnumerator] or [TreeRoundedEnumerator], or a
-// custom [TreeEnumerator] function.
-// The default is [TreeDefaultEnumerator].
+// Defaults to [TreeDefaultEnumerator]; also see [TreeRoundedEnumerator].
 //
 // Example:
 //
@@ -116,14 +85,11 @@ func WithTreeEnumerator(e tree.Enumerator) TreeOption {
 }
 
 // WithTreeIndenter sets the indenter used to draw connectors between sibling
-// nodes.
-// The default is [TreeDefaultIndenter].
+// nodes. Defaults to [TreeDefaultIndenter].
 //
 // Example:
 //
-//	WithTreeIndenter(func(children TreeChildren, index int) string {
-//		return "→ "
-//	})
+//	WithTreeIndenter(func(TreeChildren, int) string { return "-> " })
 func WithTreeIndenter(ind tree.Indenter) TreeOption {
 	return func(c *treeConfig) { c.indenter = ind }
 }
@@ -148,25 +114,15 @@ func WithTreeItemStyle(s lipgloss.Style) TreeOption {
 	return func(c *treeConfig) { c.itemStyle = s }
 }
 
-// WithTreeItemStyleFunc sets a per-node item style function.
-// When set, it overrides [WithTreeItemStyle].
-//
-// Example:
-//
-//	WithTreeItemStyleFunc(func(_ TreeChildren, i int) lipgloss.Style {
-//		if i == 0 {
-//			return lipgloss.NewStyle().Bold(true)
-//		}
-//		return lipgloss.NewStyle()
-//	})
+// WithTreeItemStyleFunc sets a per-node item style. When set, it overrides
+// [WithTreeItemStyle].
 func WithTreeItemStyleFunc(fn tree.StyleFunc) TreeOption {
 	return func(c *treeConfig) { c.itemStyleFn = fn }
 }
 
-// WithTreeEnumeratorStyle sets the [lipgloss] style for all enumerator markers
-// (├──, └──, etc.).
-// The default comes from [Theme.TreeEnumeratorStyle].
-// Use [WithTreeEnumeratorStyleFunc] for per-node control.
+// WithTreeEnumeratorStyle sets the [lipgloss] style for enumerator markers.
+// Defaults to [Theme.TreeEnumeratorStyle]; use [WithTreeEnumeratorStyleFunc]
+// for per-node control.
 //
 // Example:
 //
@@ -175,17 +131,8 @@ func WithTreeEnumeratorStyle(s lipgloss.Style) TreeOption {
 	return func(c *treeConfig) { c.enumStyle = s }
 }
 
-// WithTreeEnumeratorStyleFunc sets a per-node enumerator style function.
-// When set, it overrides [WithTreeEnumeratorStyle].
-//
-// Example:
-//
-//	WithTreeEnumeratorStyleFunc(func(_ TreeChildren, i int) lipgloss.Style {
-//		if i == 0 {
-//			return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF79C6"))
-//		}
-//		return lipgloss.NewStyle()
-//	})
+// WithTreeEnumeratorStyleFunc sets a per-node enumerator style. When set, it
+// overrides [WithTreeEnumeratorStyle].
 func WithTreeEnumeratorStyleFunc(fn tree.StyleFunc) TreeOption {
 	return func(c *treeConfig) { c.enumStyleFn = fn }
 }
@@ -200,14 +147,8 @@ func WithTreeIndenterStyle(s lipgloss.Style) TreeOption {
 	return func(c *treeConfig) { c.indenterStyle = &s }
 }
 
-// WithTreeIndenterStyleFunc sets a per-node indenter style function.
-// When set, it overrides [WithTreeIndenterStyle].
-//
-// Example:
-//
-//	WithTreeIndenterStyleFunc(func(_ TreeChildren, i int) lipgloss.Style {
-//		return lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-//	})
+// WithTreeIndenterStyleFunc sets a per-node indenter style. When set, it
+// overrides [WithTreeIndenterStyle].
 func WithTreeIndenterStyleFunc(fn tree.StyleFunc) TreeOption {
 	return func(c *treeConfig) { c.indenterStyleFn = fn }
 }
@@ -223,25 +164,12 @@ func WithTreeWidth(w int) TreeOption {
 	return func(c *treeConfig) { c.width = w }
 }
 
-// Tree prints a styled tree to the command's output writer.
-// It applies the current [Theme] tree styles by default. Pass [TreeOption]
-// values to override the enumerator, indenter, or styling.
+// Tree prints a styled tree to the command's output writer. Theme styles apply
+// by default; pass [TreeOption] values to override.
 //
 // Example:
 //
-//	c.Tree("myproject", []TreeNode{
-//		{Value: ".git"},
-//		{Value: "cmd/", Children: []TreeNode{
-//			{Value: "root.go"},
-//			{Value: "serve.go"},
-//		}},
-//		{Value: "main.go"},
-//	})
-//
-//	c.Tree("root", nodes,
-//		WithTreeEnumerator(TreeRoundedEnumerator()),
-//		WithTreeRootStyle(lipgloss.NewStyle().Bold(true)),
-//	)
+//	c.Tree("root", nodes, WithTreeEnumerator(TreeRoundedEnumerator()))
 func (c *Context) Tree(root string, children []TreeNode, opts ...TreeOption) {
 	rt := c.app.Theme()
 	cfg := &treeConfig{

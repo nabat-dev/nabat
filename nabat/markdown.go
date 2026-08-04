@@ -17,13 +17,9 @@ package nabat
 import "fmt"
 
 // Markdown renders content as markdown and writes it to [Context.IO.Out].
-// When stdout is a terminal, glamour applies styles from the active theme's
-// glamour accessor (see [theme.ResolvedTheme.Glamour] and
-// [theme.ResolvedTheme.GlamourName]). When stdout is not a terminal, the
-// raw markdown is written.
-//
-// Markdown returns a non-nil error only if writing the rendered output fails.
-// If glamour fails to initialize, [App.renderMarkdown] falls back to raw content.
+// On a TTY, glamour styles come from the active theme; otherwise raw
+// markdown is written. Returns an error only on write failure; glamour
+// init failure falls back to raw content.
 func (c *Context) Markdown(content string) error {
 	rendered := c.app.renderMarkdown(content)
 	_, err := fmt.Fprint(c.io.Out, rendered)

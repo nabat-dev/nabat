@@ -22,7 +22,6 @@ import (
 
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/colorprofile"
 
 	glamourstyles "charm.land/glamour/v2/styles"
 	chromastyles "github.com/alecthomas/chroma/v2/styles"
@@ -30,75 +29,42 @@ import (
 
 var errNilPromptKnobs = errors.New("prompt knobs input is nil")
 
-// Capabilities mirrors [nabat.dev/theme.Capabilities] inside the
-// manifest package so the parser can branch on terminal facts without
-// importing the theme package (which would create a cycle —
-// theme/catalog.go imports this package). The catalog converts at the
-// boundary by passing field-by-field copies into [CompiledVariant.GlamourFor].
-type Capabilities struct {
-	Dark        bool
-	Profile     colorprofile.Profile
-	Interactive bool
-}
-
-// Compiled is the intermediate result [Parse] produces from a
-// multi-variant manifest. It carries every value the catalog needs to
-// assemble a [nabat.dev/theme.Theme] struct, but contains no references
-// back to the theme package itself — that keeps the dependency
-// direction strictly downstream (theme -> manifest, never the
-// reverse).
-//
-// Variants are keyed by mode string ("dark" / "light" / "notty") so
-// the catalog can map directly to [nabat.dev/theme.Variant] at the
-// boundary.
+// Compiled is the intermediate [Parse] result. The catalog assembles a
+// theme.Theme from it; this type never references the theme package.
+// Variants are keyed by mode ("dark" / "light" / "notty").
 type Compiled struct {
-	// Name is the manifest's "name" field, identical to the registry
-	// key the catalog stores it under.
+	// Name is the manifest "name" field and catalog registry key.
 	Name string
 
-	// Default is the manifest's "default" field — the variant the
-	// catalog should fall back to when the runtime Capabilities do
-	// not match any declared variant. Empty for single-variant
-	// themes (the lone variant is always picked).
+	// Default is the fallback variant when capabilities do not match.
+	// Empty for single-variant themes.
 	Default string
 
-	// Variants holds one [CompiledVariant] per mode declared in the
-	// manifest's "variants" map.
+	// Variants holds one [CompiledVariant] per declared mode.
 	Variants map[string]*CompiledVariant
 
-	// PromptKnobs are theme-wide non-color prompt settings.
+	// PromptKnobs are theme-wide prompt settings, or nil when omitted.
 	PromptKnobs *PromptKnobs
 }
 
-// CompiledVariant is the per-variant style data extracted from one
-// entry under the manifest's "variants" map. Token names are plain
-// strings (the catalog wraps them as [theme.Token] at the boundary);
-// chroma / glamour / huh slots carry the selected upstream preset
-// names and adapter.
+// CompiledVariant is per-variant style data from one "variants" entry.
+// Token names are plain strings; the catalog wraps them as theme.Token.
 type CompiledVariant struct {
-	// Tokens is the resolved per-token style map keyed by dotted
-	// token name. Every entry came through the styleResolver so
-	// $primitive / $token / inline color refs have already been
-	// collapsed into concrete lipgloss styles.
+	// Tokens is the resolved per-token style map. $primitive / $token
+	// / inline refs are already collapsed into lipgloss styles.
 	Tokens map[string]lipgloss.Style
 
-	// Aliases is the per-variant alias overrides as plain strings.
-	// The catalog merges these onto theme.DefaultAliases at
-	// theme.Theme.Resolve time. An empty value disables the
-	// framework default for that key without substituting another;
-	// see theme.Palette.Aliases for the full semantics.
+	// Aliases are per-variant alias overrides. An empty value disables
+	// the framework default for that key (see theme.Palette.Aliases).
 	Aliases map[string]string
 
-	// ChromaName is the upstream chroma style name the variant
-	// declared via the "chroma" field.
+	// ChromaName is the upstream chroma style from the "chroma" field.
 	ChromaName string
 
-	// GlamourName is the upstream glamour preset name the variant
-	// declared via the "glamour" field.
+	// GlamourName is the upstream glamour preset from the "glamour" field.
 	GlamourName string
 
-	// HuhTheme is the framework-owned [huh.Theme] resolved from the
-	// per-variant "huh" adapter.
+	// HuhTheme is the [huh.Theme] from the per-variant "huh" adapter.
 	HuhTheme huh.Theme
 }
 
@@ -110,21 +76,10 @@ type PromptKnobs struct {
 	BorderColor      color.Color
 }
 
-// Parse decodes a manifest into a [*Compiled] intermediate. The
-// catalog then assembles the final [nabat.dev/theme.Theme] from this
-// value, applying capability-aware defaults for any optional field the
-// manifest omitted.
-//
-// Errors from parsing the JSON shape, validating cross-field
-// constraints, or resolving primitive / $token references surface here
-// at registry-load time. Errors that depend on the runtime
-// Capabilities (only the inline glamourStyle path can produce one) are
-// surfaced later via [CompiledVariant.GlamourFor] — the catalog
-// forwards them through [theme.Theme.ResolveErr].
-//
-// Parse is the only symbol this package exports beyond the
-// [Capabilities] type and the per-parser helpers ([HuhAdapterNames]);
-// everything else is an implementation detail of the parser pipeline.
+// Parse decodes a manifest into a [*Compiled] intermediate. Errors from
+// JSON shape, cross-field validation, or $token / primitive resolution
+// surface here. Runtime glamour failures are unrelated and surface later
+// through theme.Theme.ResolveErr.
 func Parse(data []byte) (*Compiled, error) {
 	rt, parseErr := unmarshalManifest(data)
 	if parseErr != nil {
@@ -158,7 +113,7 @@ func Parse(data []byte) (*Compiled, error) {
 	return out, nil
 }
 
-// parseVariant compiles one entry under the manifest's "variants" map.
+// parseVariant compiles one "variants" map entry.
 func parseVariant(themeName, variantName string, slice rawSlice) (*CompiledVariant, error) {
 	resolver := newStyleResolver(slice.Primitives, slice.Tokens)
 	resolved := make(map[string]lipgloss.Style, len(slice.Tokens))
@@ -188,10 +143,9 @@ func parseVariant(themeName, variantName string, slice rawSlice) (*CompiledVaria
 	return cv, nil
 }
 
-// validateManifest runs structural and cross-field checks that are not
-// already enforced by [json.Decoder.DisallowUnknownFields] or the JSON
-// Schema. It surfaces every problem at once via [errors.Join] so authors
-// see the full diagnosis on one parse instead of fixing-and-retrying.
+// validateManifest runs structural and cross-field checks beyond
+// DisallowUnknownFields / JSON Schema. It joins every problem so one
+// parse surfaces the full diagnosis.
 func validateManifest(rt *rawTheme) error {
 	var errs []error
 	if rt.Name == "" {
@@ -225,10 +179,8 @@ func validateManifest(rt *rawTheme) error {
 	return errors.Join(errs...)
 }
 
-// validateVariant runs the per-variant structural checks. Returns a
-// slice (possibly empty) so the caller can join with the top-level
-// errors. It does not return Variant-prefixed messages; the caller is
-// expected to wrap the eventual error.
+// validateVariant runs per-variant structural checks. Returns a slice
+// for the caller to join; messages are not variant-prefixed.
 func validateVariant(manifestName, variantName string, slice rawSlice) []error {
 	var errs []error
 	prefix := func(e error) error {
@@ -287,10 +239,8 @@ func parsePromptKnobs(raw *rawPromptKnobs) (*PromptKnobs, error) {
 	return out, nil
 }
 
-// glamourPresetNames returns the sorted set of upstream glamour preset
-// names. It is used to build the "did you mean" tail of validation
-// errors for the "glamour" field; sorted output keeps the message
-// stable across Go map iteration order.
+// glamourPresetNames returns sorted upstream glamour preset names for
+// validation error tails.
 func glamourPresetNames() []string {
 	out := make([]string, 0, len(glamourstyles.DefaultStyles))
 	for k := range glamourstyles.DefaultStyles {

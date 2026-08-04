@@ -15,6 +15,7 @@
 package manpage
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -25,6 +26,9 @@ import (
 
 	mcobra "github.com/muesli/mango-cobra"
 )
+
+// ErrNilOption is returned when a nil [Option] is passed to [New].
+var ErrNilOption = errors.New("nabat/manpage: option is nil")
 
 type config struct {
 	commandName string
@@ -115,26 +119,19 @@ func (e *extension) Init(app nabat.AppSurface) error {
 				}
 				return nil
 			}
-			_, writeErr := fmt.Fprint(app.IO().Out, doc)
-			return writeErr
+			if _, writeErr := fmt.Fprint(app.IO().Out, doc); writeErr != nil {
+				return fmt.Errorf("writing man page: %w", writeErr)
+			}
+			return nil
 		}),
 	)
 	_, err := app.Command(cfg.commandName, cmdOpts...)
 	return err
 }
 
-// New builds a [nabat.Extension] that installs the man subcommand and returns an
-// error when any option is nil, when option application fails, or when the
-// configuration is invalid.
-//
-// Errors:
-//   - "nabat/manpage: option at index N is nil": an entry in opts is nil.
-//   - errors wrapped with "nabat/manpage: option at index N":
-//     [Option] application failed.
-//   - "nabat/manpage: command name cannot be empty":
-//     [WithCommandName] set an empty name.
-//   - "nabat/manpage: section must be between 1 and 9, got N":
-//     the effective section is out of range.
+// New returns a [nabat.Extension] that installs the man subcommand.
+// A nil opts entry returns [ErrNilOption]. It also fails on an empty
+// [WithCommandName] or a section outside 1-9.
 func New(opts ...Option) (nabat.Extension, error) {
 	cfg := config{
 		commandName: "man",
@@ -142,7 +139,7 @@ func New(opts ...Option) (nabat.Extension, error) {
 	}
 	for i, opt := range opts {
 		if opt == nil {
-			return nil, fmt.Errorf("nabat/manpage: option at index %d is nil", i)
+			return nil, fmt.Errorf("nabat/manpage: option at index %d: %w", i, ErrNilOption)
 		}
 		if err := opt.applyToConfig(&cfg); err != nil {
 			return nil, fmt.Errorf("nabat/manpage: option at index %d: %w", i, err)

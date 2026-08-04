@@ -25,19 +25,11 @@ import (
 	"nabat.dev/theme"
 )
 
-// Context is the per-invocation runtime passed to each [RunFunc].
-//
-// It holds the resolved values for declared positional args and flags, the raw
-// positional argument strings, and the [App] that created the command. Use
-// [Context.Bind] (or [BindAs]) to read resolved values into a struct or a single
-// typed name.
-//
-// Context implements [context.Context] by delegating to the context passed to
-// [App.Run] (or [context.Background] if none was set on the Cobra command).
-//
-// Context is not safe for concurrent use. Each command invocation receives its own
-// Context; do not share it across goroutines or retain it after the [RunFunc]
-// returns.
+// Context is the per-invocation runtime passed to each [RunFunc]. It holds
+// resolved args and flags, raw positionals, and the parent [App]. Use
+// [Context.Bind] or [BindAs] to read values. It implements [context.Context]
+// by delegating to the context from [App.Run]. Not safe for concurrent use;
+// do not retain it after the [RunFunc] returns.
 type Context struct {
 	ctx context.Context
 	app *App
@@ -92,14 +84,9 @@ func (c *Context) Value(key any) any {
 	return c.ctx.Value(key)
 }
 
-// Context returns the underlying [context.Context] carried by this [Context].
-// Use it as the parent when building a derived context for [Context.SetContext]:
-//
-//	enriched := context.WithValue(c.Context(), key, val)
-//	c.SetContext(enriched)
-//
-// Using c itself as the parent would create an infinite delegation cycle;
-// always use Context() as the parent.
+// Context returns the underlying [context.Context]. Use it as the parent when
+// deriving a context for [Context.SetContext]; never pass c itself (that would
+// create an infinite delegation cycle).
 func (c *Context) Context() context.Context {
 	if c == nil || c.ctx == nil {
 		return context.Background()
@@ -107,22 +94,13 @@ func (c *Context) Context() context.Context {
 	return c.ctx
 }
 
-// SetContext replaces the underlying [context.Context] carried by this
-// [Context]. Use it in [App.OnPreRun] or [Command.OnPreRun] hooks to
-// propagate request-scoped values to downstream hooks and the command's
-// [RunFunc].
+// SetContext replaces the underlying [context.Context]. Use in [App.OnPreRun]
+// or [Command.OnPreRun] to propagate request-scoped values. Always derive from
+// [Context.Context], not from c itself.
 //
-// The typical pattern pairs SetContext with [Context.Context] and a
-// package-level WithContext/FromContext accessor pair:
+// Example:
 //
-//	app.OnPreRun(func(c *Context) error {
-//	    rt := runtime.New()
-//	    c.SetContext(runtime.WithContext(c.Context(), rt))
-//	    return nil
-//	})
-//
-// Always pass [Context.Context] as the parent when deriving a new context.
-// Passing c itself creates an infinite delegation cycle.
+//	c.SetContext(context.WithValue(c.Context(), key, val))
 func (c *Context) SetContext(ctx context.Context) {
 	c.ctx = ctx
 }
@@ -181,12 +159,8 @@ func (c *Context) IO() *IOStreams {
 // c.Logger() from accidentally writing to the process-wide slog default.
 var discardLogger = slog.New(slog.DiscardHandler)
 
-// Logger returns the structured logger for this command invocation.
-//
-// The logger is sourced from (in order of precedence):
-//   - the logging plugin, when installed via [WithExtension]
-//   - [WithLogger] (or [App.SetLogger]) when used at construction time
-//   - a discard logger that silently drops all records (the default)
+// Logger returns the structured logger for this invocation (extension,
+// [WithLogger]/[App.SetLogger], or a discard logger by default).
 func (c *Context) Logger() *slog.Logger {
 	if c.logger != nil {
 		return c.logger
