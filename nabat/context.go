@@ -16,7 +16,9 @@ package nabat
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -26,10 +28,10 @@ import (
 )
 
 // Context is the per-invocation runtime passed to each [RunFunc]. It holds
-// resolved args and flags, raw positionals, and the parent [App]. Use
-// [Context.Bind] or [BindAs] to read values. It implements [context.Context]
-// by delegating to the context from [App.Run]. Not safe for concurrent use;
-// do not retain it after the [RunFunc] returns.
+// resolved args and flags, raw positionals, the virtual working directory,
+// and the parent [App]. Use [Context.Bind] or [BindAs] to read values. It
+// implements [context.Context] by delegating to the context from [App.Run].
+// Not safe for concurrent use; do not retain it after the [RunFunc] returns.
 type Context struct {
 	ctx context.Context
 	app *App
@@ -48,6 +50,7 @@ type Context struct {
 	values          map[string]any
 	set             map[string]bool // true = value came from arg/env/prompt, not a default
 	interactive     bool
+	dir             string // virtual working directory for this invocation
 }
 
 var _ context.Context = (*Context)(nil)
@@ -96,7 +99,7 @@ func (c *Context) Context() context.Context {
 
 // SetContext replaces the underlying [context.Context]. Use in [App.OnPreRun]
 // or [Command.OnPreRun] to propagate request-scoped values. Always derive from
-// [Context.Context], not from c itself.
+// [Context.Context], not from c itself. [Context.Dir] is unchanged.
 //
 // Example:
 //
@@ -217,6 +220,15 @@ func (a *App) newContext(cmd *cobra.Command, args []string) (*Context, error) {
 		values:          map[string]any{},
 		set:             map[string]bool{},
 		interactive:     a.io.IsInteractive(),
+	}
+	if attached, ok := dirFromContext(goCtx); ok {
+		ctx.dir = attached
+	} else {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("nabat: working directory: %w", err)
+		}
+		ctx.dir = wd
 	}
 
 	if err := a.resolveArgs(ctx); err != nil {

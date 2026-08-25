@@ -44,8 +44,9 @@ func (i argDef) validate() error {
 	return validateDefaultType("arg", i.name, i.valueType, i.config)
 }
 
-func (a *App) promptArg(def argDef) (any, error) {
+func (a *App) promptArg(def argDef, startDir string) (any, error) {
 	pc := def.prompt
+	pc.contextDir = startDir
 
 	switch def.valueType.kind {
 	case valueString:

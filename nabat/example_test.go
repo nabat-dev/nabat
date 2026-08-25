@@ -483,7 +483,8 @@ func ExampleWithCompleter() {
 		nabat.WithFlag("cluster", "", nabat.WithCompleter(
 			func(args []string, toComplete string) ([]string, nabat.CompletionDirective) {
 				return []string{"eu-1"}, nabat.CompletionDefault
-			})),
+			},
+		)),
 		nabat.WithRun(func(c *nabat.Context) error { return nil }),
 	)
 	fmt.Println(err == nil)
@@ -764,6 +765,30 @@ func ExampleContext_SetContext() {
 	fmt.Print(strings.TrimSpace(out.String()))
 	// Output:
 	// production
+}
+
+// ExampleContext_Abs resolves a relative path against a virtual working
+// directory attached with nabat.WithDir.
+func ExampleContext_Abs() {
+	io, _, out, _ := nabattest.NewIO()
+	app, err := nabat.New("myctl", nabat.WithIO(io),
+		nabat.WithRun(func(c *nabat.Context) error {
+			c.Print(c.Abs("deployah.yaml"))
+			return nil
+		}),
+	)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	ctx := nabat.WithDir(context.Background(), "/tmp/project")
+	if err = app.RunArgs(ctx); err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Print(strings.TrimSpace(out.String()))
+	// Output:
+	// /tmp/project/deployah.yaml
 }
 
 // ExampleAsExtension wraps a function as an extension; Init runs during New

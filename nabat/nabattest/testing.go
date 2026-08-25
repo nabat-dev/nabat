@@ -18,7 +18,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -45,8 +47,10 @@ func NewTTYIO() (*nabat.IOStreams, *bytes.Buffer, *bytes.Buffer, *bytes.Buffer) 
 }
 
 type runConfig struct {
-	ctx context.Context
-	env map[string]string
+	ctx    context.Context
+	env    map[string]string
+	dir    string
+	dirSet bool
 }
 
 // RunOption configures [Run].
@@ -69,6 +73,16 @@ func WithEnvVars(values map[string]string) RunOption {
 	}
 }
 
+// WithDir sets the virtual working directory for this run. [RunParallel]
+// accepts it. An empty dir is an error. A relative dir is made absolute
+// on the calling goroutine against the process working directory.
+func WithDir(dir string) RunOption {
+	return func(c *runConfig) {
+		c.dir = dir
+		c.dirSet = true
+	}
+}
+
 // Run executes app with args and returns any error from [nabat.App.RunArgs].
 // Pass a non-nil tb so failures are attributed; tb may be nil for examples.
 // Use [RunParallel] after [testing.T.Parallel].
@@ -84,8 +98,9 @@ func Run(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) error 
 
 // RunParallel is like [Run] but safe after [testing.T.Parallel].
 // [WithEnvVars] is rejected; set env via [testing.TB.Setenv] before
-// Parallel, or use [Run] serially. Other failures come from
-// [nabat.App.RunArgs].
+// Parallel, or use [Run] serially. Do not share an [nabat.App] across
+// parallel [Run] or [RunParallel] calls; [nabat.App.RunArgs] mutates
+// cobra args. Other failures come from [nabat.App.RunArgs].
 func RunParallel(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) error {
 	return runInternal(tb, app, args, true, opts...)
 }
@@ -110,6 +125,14 @@ func runInternal(tb testing.TB, app *nabat.App, args []string, parallel bool, op
 
 	if parallel && len(cfg.env) > 0 {
 		return errors.New("nabattest: RunParallel does not support WithEnvVars; set env before t.Parallel or call nabattest.Run instead")
+	}
+
+	if cfg.dirSet {
+		dir, err := resolveDir(cfg.dir)
+		if err != nil {
+			return err
+		}
+		cfg.ctx = nabat.WithDir(cfg.ctx, dir)
 	}
 
 	if tb != nil {
@@ -171,7 +194,9 @@ func Capture(tb testing.TB, app *nabat.App, args []string, opts ...RunOption) Ca
 // Context returns a [*nabat.Context] for helpers that take a Context
 // directly. It wraps [nabat.App.NewBareContext] and binds the context to
 // the test lifecycle when tb is non-nil. Pass [WithContext] to set the
-// underlying [context.Context].
+// underlying [context.Context]. Pass [WithDir] to set the virtual working
+// directory; an empty or unresolvable dir calls tb.Fatal when tb is
+// non-nil, and is skipped when tb is nil.
 //
 // Example:
 //
@@ -196,8 +221,33 @@ func Context(tb testing.TB, app *nabat.App, opts ...RunOption) *nabat.Context {
 	c := app.NewBareContext()
 	if c != nil {
 		c.SetContext(cfg.ctx)
+		if cfg.dirSet {
+			dir, err := resolveDir(cfg.dir)
+			if err != nil {
+				if tb != nil {
+					tb.Fatal(err)
+				}
+				return c
+			}
+			c.SetDir(dir)
+		}
 	}
 	return c
+}
+
+// resolveDir absolutizes dir for [WithDir]. Empty dir is an error.
+func resolveDir(dir string) (string, error) {
+	if dir == "" {
+		return "", errors.New("nabattest: WithDir: dir cannot be empty")
+	}
+	if !filepath.IsAbs(dir) {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("nabattest: WithDir: resolve relative path: %w", err)
+		}
+		dir = filepath.Join(wd, dir)
+	}
+	return filepath.Clean(dir), nil
 }
 
 // setProcessEnv mutates process env directly and returns a restore func.

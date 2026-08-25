@@ -197,14 +197,16 @@ func validateVariant(manifestName, variantName string, slice rawSlice) []error {
 		if _, ok := chromastyles.Registry[slice.Chroma]; !ok {
 			errs = append(errs, prefix(fmt.Errorf(
 				"chroma %q is not a registered chroma style; available: %v",
-				slice.Chroma, chromastyles.Names())))
+				slice.Chroma, chromastyles.Names(),
+			)))
 		}
 	}
 	if slice.Glamour != "" {
 		if _, ok := glamourstyles.DefaultStyles[slice.Glamour]; !ok {
 			errs = append(errs, prefix(fmt.Errorf(
 				"glamour %q is not a known glamour preset; available: %v",
-				slice.Glamour, glamourPresetNames())))
+				slice.Glamour, glamourPresetNames(),
+			)))
 		}
 	}
 	if slice.Huh != "" {

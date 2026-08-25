@@ -594,7 +594,8 @@ func (a *App) IO() *IOStreams {
 
 // NewBareContext returns a [*Context] with the app's [IOStreams] and theme,
 // but no resolved args, flags, or command. Use for themed helpers outside a
-// [RunFunc]. In tests prefer [nabattest.Context].
+// [RunFunc]. In tests prefer [nabattest.Context]. [Context.Dir] snapshots
+// the process working directory and stays empty if [os.Getwd] fails.
 func (a *App) NewBareContext() *Context {
 	if a == nil {
 		return nil
@@ -612,6 +613,9 @@ func (a *App) NewBareContext() *Context {
 	}
 	if a.cfg.logger != nil {
 		ctx.logger = a.cfg.logger
+	}
+	if wd, err := os.Getwd(); err == nil {
+		ctx.dir = wd
 	}
 	return ctx
 }
@@ -931,8 +935,9 @@ func MustNew(name string, opts ...Option) *App {
 // On error, nothing is registered and the returned [*Command] is nil.
 // Prefer [WithCommand] inside [New] to aggregate many registration errors;
 // use [App.MustCommand] for panicking chains in main or tests.
-// It may return [ErrRegistrationFrozen], [ErrNilOption], [ErrArgFlagNameCollision],
-// or an error for an empty name or failed option/flag finalization.
+// It may return [ErrRegistrationFrozen], [ErrNilOption],
+// [ErrArgFlagNameCollision], or an error for an empty name or failed
+// option/flag finalization.
 func (a *App) Command(name string, opts ...CommandOption) (*Command, error) {
 	if a.registrationFrozen.Load() {
 		return nil, ErrRegistrationFrozen
@@ -974,6 +979,7 @@ func (a *App) Run(ctx context.Context) error {
 
 // RunArgs is like [App.Run] but takes args instead of [os.Args].
 // In tests prefer [nabattest]. Errors and stderr behavior match [App.Run].
+// Not safe for concurrent use on the same App.
 func (a *App) RunArgs(ctx context.Context, args ...string) error {
 	a.root.SetArgs(args)
 	defer a.root.SetArgs(nil)

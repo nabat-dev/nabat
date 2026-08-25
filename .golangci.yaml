@@ -325,8 +325,10 @@ formatters:
     gofumpt:
       # Module path for determining local imports
       module-path: nabat.dev
-      # Enable additional formatting rules beyond gofmt
-      extra-rules: true
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
 
     gci:
       # Import section order

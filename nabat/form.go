@@ -15,6 +15,7 @@
 package nabat
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"time"
@@ -94,7 +95,7 @@ type formGroup struct {
 // fieldEntry is the existential interface that lets formGroup hold typed
 // fields without fixing T at the group level.
 type fieldEntry interface {
-	buildHuh() (huh.Field, error)
+	buildHuh(startDir string) (huh.Field, error)
 	applyFallback() error
 	fieldTitle() string
 }
@@ -108,10 +109,12 @@ type typedFormField[T any] struct {
 	target   *T
 	fallback T
 	hasFB    bool
-	build    func() (huh.Field, error)
+	build    func(startDir string) (huh.Field, error)
 }
 
-func (f typedFormField[T]) buildHuh() (huh.Field, error) { return f.build() }
+func (f typedFormField[T]) buildHuh(startDir string) (huh.Field, error) {
+	return f.build(startDir)
+}
 
 func (f typedFormField[T]) applyFallback() error {
 	if !f.hasFB {
@@ -130,7 +133,7 @@ type noteEntry struct {
 	body  string
 }
 
-func (e noteEntry) buildHuh() (huh.Field, error) {
+func (e noteEntry) buildHuh(_ string) (huh.Field, error) {
 	n := huh.NewNote().Title(e.title)
 	if e.body != "" {
 		n = n.Description(e.body)
@@ -343,7 +346,7 @@ func WithSelectField[E comparable](
 			target:   target,
 			fallback: defaultVal,
 			hasFB:    true,
-			build: func() (huh.Field, error) {
+			build: func(_ string) (huh.Field, error) {
 				options := make([]huh.Option[E], 0, len(choices))
 				for _, c := range choices {
 					options = append(options, huh.NewOption(fmt.Sprint(c), c))
@@ -429,7 +432,7 @@ func WithMultiSelectField[E comparable](
 			target:   target,
 			fallback: dv,
 			hasFB:    true,
-			build: func() (huh.Field, error) {
+			build: func(_ string) (huh.Field, error) {
 				options := make([]huh.Option[E], 0, len(choices))
 				for _, c := range choices {
 					options = append(options, huh.NewOption(fmt.Sprint(c), c))
@@ -506,8 +509,11 @@ func asSelectOptions(opts []MultiSelectOption) []SelectOption {
 }
 
 // buildFormField dispatches to the right Huh widget based on T and mode.
-func buildFormField[T FormFieldValue](target *T, pc promptConfig) func() (huh.Field, error) {
-	return func() (huh.Field, error) {
+// startDir is [Context.Dir]; the file picker uses it when [WithCurrentDir]
+// is unset.
+func buildFormField[T FormFieldValue](target *T, pc promptConfig) func(startDir string) (huh.Field, error) {
+	return func(startDir string) (huh.Field, error) {
+		pc.contextDir = startDir
 		var zero T
 		switch any(zero).(type) {
 		case string:
@@ -627,8 +633,9 @@ func buildFileField(target *string, pc promptConfig) huh.Field {
 	if pc.dirAllowed {
 		f = f.DirAllowed(true)
 	}
-	if pc.currentDir != "" {
-		f = f.CurrentDirectory(pc.currentDir)
+	// [WithCurrentDir] wins over [Context.Dir]. Empty leaves Huh's default.
+	if dir := cmp.Or(pc.currentDir, pc.contextDir); dir != "" {
+		f = f.CurrentDirectory(dir)
 	}
 	if pc.showHidden {
 		f = f.ShowHidden(true)
@@ -775,7 +782,7 @@ func (c *Context) Form(opts ...FormOption) error {
 	for i, g := range fc.groups {
 		huhFields := make([]huh.Field, 0, len(g.fields))
 		for _, fe := range g.fields {
-			hf, err := fe.buildHuh()
+			hf, err := fe.buildHuh(c.Dir())
 			if err != nil {
 				return fmt.Errorf("nabat: form field %q: %w", fe.fieldTitle(), err)
 			}
