@@ -15,6 +15,7 @@
 package nabat
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"time"
@@ -632,10 +633,9 @@ func buildFileField(target *string, pc promptConfig) huh.Field {
 	if pc.dirAllowed {
 		f = f.DirAllowed(true)
 	}
-	if pc.currentDir != "" {
-		f = f.CurrentDirectory(pc.currentDir)
-	} else if pc.contextDir != "" {
-		f = f.CurrentDirectory(pc.contextDir)
+	// [WithCurrentDir] wins over [Context.Dir]. Empty leaves Huh's default.
+	if dir := cmp.Or(pc.currentDir, pc.contextDir); dir != "" {
+		f = f.CurrentDirectory(dir)
 	}
 	if pc.showHidden {
 		f = f.ShowHidden(true)

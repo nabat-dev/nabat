@@ -27,44 +27,33 @@ import (
 
 func TestRunParallelWithDir(t *testing.T) {
 	t.Parallel()
+	tests := []struct {
+		name   string
+		marker string
+	}{
+		{name: "dirA", marker: "A"},
+		{name: "dirB", marker: "B"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "marker"), []byte(tt.marker), 0o600))
 
-	t.Run("dirA", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "marker"), []byte("A"), 0o600))
-
-		io, _, out, _ := NewIO()
-		app := nabat.MustNew("test", nabat.WithIO(io),
-			nabat.WithCommand("read", nabat.WithRun(func(c *nabat.Context) error {
-				data, err := os.ReadFile(c.Abs("marker"))
-				if err != nil {
-					return err
-				}
-				c.Print(string(data))
-				return nil
-			})))
-		require.NoError(t, RunParallel(t, app, []string{"read"}, WithDir(dir)))
-		assert.Equal(t, "A", out.String())
-	})
-
-	t.Run("dirB", func(t *testing.T) {
-		t.Parallel()
-		dir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "marker"), []byte("B"), 0o600))
-
-		io, _, out, _ := NewIO()
-		app := nabat.MustNew("test", nabat.WithIO(io),
-			nabat.WithCommand("read", nabat.WithRun(func(c *nabat.Context) error {
-				data, err := os.ReadFile(c.Abs("marker"))
-				if err != nil {
-					return err
-				}
-				c.Print(string(data))
-				return nil
-			})))
-		require.NoError(t, RunParallel(t, app, []string{"read"}, WithDir(dir)))
-		assert.Equal(t, "B", out.String())
-	})
+			io, _, out, _ := NewIO()
+			app := nabat.MustNew("test", nabat.WithIO(io),
+				nabat.WithCommand("read", nabat.WithRun(func(c *nabat.Context) error {
+					data, err := os.ReadFile(c.Abs("marker"))
+					if err != nil {
+						return err
+					}
+					c.Print(string(data))
+					return nil
+				})))
+			require.NoError(t, RunParallel(t, app, []string{"read"}, WithDir(dir)))
+			assert.Equal(t, tt.marker, out.String())
+		})
+	}
 }
 
 func TestDirDefaultsToGetwd(t *testing.T) {
@@ -119,13 +108,29 @@ func TestWithDirEmptyReturnsError(t *testing.T) {
 
 func TestContextWithDir(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	io, _, _, _ := NewIO()
-	app := nabat.MustNew("test", nabat.WithIO(io))
-	c := Context(t, app, WithDir(dir))
-	require.NotNil(t, c)
-	assert.Equal(t, dir, c.Dir())
-	assert.Equal(t, filepath.Join(dir, "marker"), c.Abs("marker"))
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	abs := t.TempDir()
+
+	tests := []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "absolute", dir: abs, want: abs},
+		{name: "relative", dir: "rel-ctx", want: filepath.Clean(filepath.Join(wd, "rel-ctx"))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			io, _, _, _ := NewIO()
+			app := nabat.MustNew("test", nabat.WithIO(io))
+			c := Context(t, app, WithDir(tt.dir))
+			require.NotNil(t, c)
+			assert.Equal(t, tt.want, c.Dir())
+			assert.Equal(t, filepath.Join(tt.want, "marker"), c.Abs("marker"))
+		})
+	}
 }
 
 func TestNilContextDirAndAbs(t *testing.T) {
@@ -135,4 +140,52 @@ func TestNilContextDirAndAbs(t *testing.T) {
 	assert.Equal(t, "foo", c.Abs("foo"))
 	assert.Equal(t, "/already/abs", c.Abs("/already/abs"))
 	c.SetDir("/tmp") // no panic
+}
+
+func TestWithDirRelativeAbsolutizesAgainstGetwd(t *testing.T) {
+	t.Parallel()
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	want := filepath.Clean(filepath.Join(wd, "rel-wd"))
+
+	io, _, _, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io),
+		nabat.WithCommand("dir", nabat.WithRun(func(c *nabat.Context) error {
+			assert.Equal(t, want, c.Dir())
+			return nil
+		})))
+	require.NoError(t, RunParallel(t, app, []string{"dir"}, WithDir("rel-wd")))
+}
+
+func TestContextNilTBEmptyWithDirSkipped(t *testing.T) {
+	t.Parallel()
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
+	io, _, _, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io))
+	c := Context(nil, app, WithDir(""))
+	require.NotNil(t, c)
+	assert.Equal(t, wd, c.Dir())
+}
+
+func TestCaptureWithDir(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "marker"), []byte("ok"), 0o600))
+
+	io, _, _, _ := NewIO()
+	app := nabat.MustNew("test", nabat.WithIO(io),
+		nabat.WithCommand("read", nabat.WithRun(func(c *nabat.Context) error {
+			data, err := os.ReadFile(c.Abs("marker"))
+			if err != nil {
+				return err
+			}
+			c.Print(string(data))
+			return nil
+		})))
+	got := Capture(t, app, []string{"read"}, WithDir(dir))
+	require.NoError(t, got.Err)
+	require.NotNil(t, got.Stdout)
+	assert.Equal(t, "ok", got.Stdout.String())
 }
