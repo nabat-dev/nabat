@@ -931,8 +931,9 @@ func MustNew(name string, opts ...Option) *App {
 // On error, nothing is registered and the returned [*Command] is nil.
 // Prefer [WithCommand] inside [New] to aggregate many registration errors;
 // use [App.MustCommand] for panicking chains in main or tests.
-// It may return [ErrRegistrationFrozen], [ErrNilOption], [ErrArgFlagNameCollision],
-// or an error for an empty name or failed option/flag finalization.
+// It may return [ErrRegistrationFrozen], [ErrNilOption],
+// [ErrArgFlagNameCollision], or an error for an empty name or failed
+// option/flag finalization.
 func (a *App) Command(name string, opts ...CommandOption) (*Command, error) {
 	if a.registrationFrozen.Load() {
 		return nil, ErrRegistrationFrozen

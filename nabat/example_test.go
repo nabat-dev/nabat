@@ -483,7 +483,8 @@ func ExampleWithCompleter() {
 		nabat.WithFlag("cluster", "", nabat.WithCompleter(
 			func(args []string, toComplete string) ([]string, nabat.CompletionDirective) {
 				return []string{"eu-1"}, nabat.CompletionDefault
-			})),
+			},
+		)),
 		nabat.WithRun(func(c *nabat.Context) error { return nil }),
 	)
 	fmt.Println(err == nil)

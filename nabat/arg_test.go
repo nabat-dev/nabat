@@ -472,6 +472,7 @@ func TestWithArgNumericFromEnv(t *testing.T) {
 		{
 			name: "int", envKey: "TEST_COUNT", envVal: "99", argName: "count",
 			setup: func(t *testing.T, app *App) func() any {
+				t.Helper()
 				var got int
 				app.MustCommand("run",
 					WithArg("count", 0, WithEnv("count")),
@@ -489,6 +490,7 @@ func TestWithArgNumericFromEnv(t *testing.T) {
 		{
 			name: "uint", envKey: "TEST_PORT", envVal: "9000", argName: "port",
 			setup: func(t *testing.T, app *App) func() any {
+				t.Helper()
 				var got uint
 				app.MustCommand("run",
 					WithArg("port", uint(0), WithEnv("port")),
@@ -506,6 +508,7 @@ func TestWithArgNumericFromEnv(t *testing.T) {
 		{
 			name: "int64", envKey: "TEST_SIZE", envVal: "1099511627776", argName: "size",
 			setup: func(t *testing.T, app *App) func() any {
+				t.Helper()
 				var got int64
 				app.MustCommand("run",
 					WithArg("size", int64(0), WithEnv("size")),

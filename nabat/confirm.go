@@ -100,6 +100,6 @@ func WithBypassHint(hint string) FieldOption[bool] {
 	}}
 }
 
-func confirmationError(prompt string, hint string) error {
+func confirmationError(prompt, hint string) error {
 	return &ConfirmationError{Prompt: prompt, BypassHint: hint}
 }

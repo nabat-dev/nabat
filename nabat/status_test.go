@@ -289,7 +289,7 @@ func TestStatusNonTTYColumnAlignment(t *testing.T) {
 	lines := splitLinesStatus(out)
 	var dataLines []string
 	for _, l := range lines {
-		if len(l) > 0 && (containsAnyStatus(l, "short", "a-much-longer-key")) {
+		if len(l) > 0 && containsAnyStatus(l, "short", "a-much-longer-key") {
 			dataLines = append(dataLines, l)
 		}
 	}

@@ -27,9 +27,6 @@
         ++ (with pkgs; [
           gopls
           gotools
-          # nixpkgs golangci-lint is still built with Go 1.26 and rejects go.mod
-          # 1.27 until upstream ships Go 1.27 support:
-          # https://github.com/golangci/golangci-lint/issues/6643
           golangci-lint
           markdownlint-cli
           delve
@@ -59,11 +56,8 @@
               entry = "${go}/bin/gofmt -l -w";
               files = "\\.go$";
             };
-            # Disabled while go.mod is 1.27: nixpkgs golangci-lint is built with
-            # Go 1.26 and fails config load. Re-enable when
-            # https://github.com/golangci/golangci-lint/issues/6643 lands.
             golangci-lint = {
-              enable = false;
+              enable = true;
               extraPackages = [ go ];
             };
             markdownlint = {
@@ -143,26 +137,19 @@
             '';
           };
 
-          # Skip until golangci-lint supports Go 1.27:
-          # https://github.com/golangci/golangci-lint/issues/6643
-          # nixpkgs' binary is built with Go 1.26 and rejects go.mod 1.27.
           lint = mkApp {
             name = "lint";
-            description = "Run golangci-lint (skipped until Go 1.27 support)";
+            description = "Run golangci-lint";
             script = ''
-              echo "skipping golangci-lint: Go 1.27 not supported yet"
-              echo "see https://github.com/golangci/golangci-lint/issues/6643"
-              exit 0
+              exec ${pkgs.golangci-lint}/bin/golangci-lint run ./...
             '';
           };
 
           lint-gomod = mkApp {
             name = "lint-gomod";
-            description = "Run golangci-lint gomoddirectives (skipped until Go 1.27 support)";
+            description = "Run golangci-lint gomoddirectives on go.mod (CI hygiene)";
             script = ''
-              echo "skipping golangci-lint gomoddirectives: Go 1.27 not supported yet"
-              echo "see https://github.com/golangci/golangci-lint/issues/6643"
-              exit 0
+              exec ${pkgs.golangci-lint}/bin/golangci-lint run -c .golangci-gomod.yaml ./...
             '';
           };
 

@@ -340,7 +340,7 @@ func (c *Context) runTTYSpinner(
 
 	// finish prefers fnErr, then a prior live-frame write error, then the
 	// final-line write error, then context cancellation.
-	finish := func(fnErr error, animated bool, cancel bool, liveErr error) error {
+	finish := func(fnErr error, animated, cancel bool, liveErr error) error {
 		wErr := writeDone(fnErr, animated)
 		if fnErr != nil {
 			return fnErr
