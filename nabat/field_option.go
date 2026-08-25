@@ -250,6 +250,7 @@ func (currentDirOpt) fieldOpt(string)                {}
 func (o currentDirOpt) apply(pc *promptConfig) error { pc.currentDir = o.dir; return nil }
 
 // WithCurrentDir sets the starting directory for the file picker.
+// It overrides [Context.Dir] when both are set.
 // Only meaningful when [WithFilePicker] is also set.
 func WithCurrentDir(dir string) FieldOption[string] { return currentDirOpt{dir: dir} }
 

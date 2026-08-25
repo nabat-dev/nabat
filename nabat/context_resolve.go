@@ -52,7 +52,7 @@ func (a *App) resolveArgs(c *Context) error {
 		// their non-interactive fallback (see prompt.go for the rationale);
 		// hasFallback only applies to ad-hoc Context.* prompts.
 		if c.interactive && in.prompt.text != "" {
-			v, promptErr := a.promptArg(in)
+			v, promptErr := a.promptArg(in, c.Dir())
 			if promptErr != nil {
 				return fmt.Errorf("nabat: prompt for arg %q failed: %w", in.name, promptErr)
 			}

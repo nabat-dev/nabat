@@ -78,9 +78,11 @@ type promptConfig struct {
 	editorExtension string
 
 	// allowedTypes / dirAllowed / currentDir configure the file-picker widget.
+	// contextDir is the invocation [Context.Dir], used when currentDir is empty.
 	allowedTypes []string
 	dirAllowed   bool
 	currentDir   string
+	contextDir   string
 
 	// showHidden / showSize / showPermissions are file-picker display flags.
 	// Set by [WithShowHidden], [WithShowSize], [WithShowPermissions].

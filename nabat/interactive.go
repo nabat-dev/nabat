@@ -29,6 +29,7 @@ func runAdhocPromptConfig[T any](c *Context, label, title string, opts []FieldOp
 	if err := applyFieldOptions(label, opts, &pc); err != nil {
 		return promptConfig{}, err
 	}
+	pc.contextDir = c.Dir()
 	if !c.interactive {
 		if pc.hasFallback {
 			return pc, nil
