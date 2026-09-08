@@ -132,9 +132,18 @@ func (c *Context) HasPassthrough() bool {
 	return c.hasPassthrough
 }
 
-// IsInteractive reports whether stdin/stdout are both terminals.
+// CanPrompt reports whether this invocation may present an interactive
+// prompt. Prompts read stdin and render on stderr, so both must be
+// terminals. This is independent of [theme.Capabilities.Interactive],
+// which is stdout TTY state for theme resolution.
+func (c *Context) CanPrompt() bool {
+	return c != nil && c.interactive
+}
+
+// IsInteractive reports whether this invocation may present an
+// interactive prompt. It matches [Context.CanPrompt].
 func (c *Context) IsInteractive() bool {
-	return c.interactive
+	return c.CanPrompt()
 }
 
 // Explicit reports whether the named arg or flag was provided via the command
@@ -219,7 +228,7 @@ func (a *App) newContext(cmd *cobra.Command, args []string) (*Context, error) {
 		hasPassthrough:  hasPassthrough,
 		values:          map[string]any{},
 		set:             map[string]bool{},
-		interactive:     a.io.IsInteractive(),
+		interactive:     CanPrompt(a.io),
 	}
 	if attached, ok := dirFromContext(goCtx); ok {
 		ctx.dir = attached

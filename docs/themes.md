@@ -575,8 +575,8 @@ type Capabilities struct {
 
 `Interactive` reports whether the primary output stream is a TTY for theme
 resolution (`io.IsStdoutTTY()`). Despite the field name, this capability is
-not the same as prompt interactivity. Prompt availability is determined
-separately by the command/context I/O state.
+not the same as prompt availability. Prompts use `nabat.CanPrompt`: stdin
+and stderr must both be TTYs.
 
 `Theme.pickVariant` uses `Interactive` to prefer a `notty` variant when
 primary output is not a TTY. `Profile` is not part of that variant-selection

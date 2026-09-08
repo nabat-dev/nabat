@@ -106,7 +106,7 @@ Read more in the [Brand Story](#brand-story).
 - **Semantic output.** `c.Success`, `c.Warn`, `c.Error`, `c.Info` write to stderr and use the theme.
 - **Structured output.** `c.Table`, `c.List`, `c.Tree`, `c.JSON`, `c.YAML`, `c.TOML`, `c.Encode`, `c.Highlight`, `c.Markdown` write command product to stdout. `c.Print`, `c.Println`, and `c.Printf` write plain stdout text.
 - **Live status and progress.** `c.Spinner`, `c.Status`, and `c.ProgressBar` write to stderr and degrade to stable text when stderr is not a TTY.
-- **Interactive prompts and forms.** `c.Confirm`, `c.Form`, `c.Input`, `c.TextInput`, `c.FilePicker`, `c.Select`, and `c.MultiSelect` use [Huh](https://pkg.go.dev/charm.land/huh/v2)-backed presentation. Seed with `WithInitial` / `WithPrefill`; non-interactive paths use `WithDefault`.
+- **Interactive prompts and forms.** `c.Confirm`, `c.Form`, `c.Input`, `c.TextInput`, `c.FilePicker`, `c.Select`, and `c.MultiSelect` use [Huh](https://pkg.go.dev/charm.land/huh/v2)-backed presentation. Each API documents its own initial-value and non-interactive fallback.
 - **Product chrome.** `c.Fields` for aligned key/value blocks and `c.Badge` for status chips.
 - **Twelve built-in themes.** Catppuccin, Dracula, Gruvbox, Nord, Solarized, and the Nabat brand theme, among others. Use `c.Theme()`, `c.Style()`, and `c.Render()` from a RunFunc.
 - **Pipe-friendly by default.** Honors `NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`, and TTY detection.
@@ -354,7 +354,7 @@ services, err := c.BindAs[[]string]("services")
 ```
 
 > [!WARNING]
-> **Required args in non-TTY environments (CI, pipes):** when `WithRequired()` is set and stdin is not a terminal, Nabat returns an error instead of prompting. Provide the value via a CLI arg or add `WithEnv("KEY")` so it can also come from an environment variable.
+> **Required args when prompting is unavailable:** `WithRequired()` needs a CLI token, env var, or completed prompt. Constructor defaults do not count. When stdin or stderr is not a TTY, Nabat cannot prompt and returns an error unless CLI or env supplies the value.
 
 #### Adaptive Resolution
 
@@ -366,15 +366,18 @@ flowchart LR
     cli[CLI argument] -->|present| done[Resolved]
     cli -->|absent| envCheck{WithEnv set?}
     envCheck -->|yes, var set| done
-    envCheck -->|no or unset| ttyCheck{TTY and prompt?}
-    ttyCheck -->|yes| prompt[Interactive prompt] --> done
-    ttyCheck -->|no| def[Typed default] --> done
+    envCheck -->|no or unset| promptCheck{prompt-capable and WithPrompt?}
+    promptCheck -->|yes| prompt[Interactive prompt] --> done
+    promptCheck -->|no| requiredCheck{WithRequired?}
+    requiredCheck -->|yes| fail[Error]
+    requiredCheck -->|no| def[Typed default] --> done
 ```
 
 1. **CLI argument:** the user passes it on the command line.
 2. **Env var:** only if you added `WithEnv` to the arg. The env var name is built from the app prefix plus the key.
-3. **Interactive prompt:** only if stdin is a TTY and you declared a prompt (with `WithPrompt`).
-4. **Typed default:** the value you passed to `WithArg` or `WithSelectArg`.
+3. **Interactive prompt:** only if `CanPrompt` is true (stdin and stderr are both TTYs) and you declared a prompt (with `WithPrompt`).
+4. **Required check:** `WithRequired()` fails here if no earlier source supplied a value. Constructor defaults do not satisfy it.
+5. **Typed default:** the value you passed to `WithArg` or `WithSelectArg`.
 
 ![Cascade](https://nabat.dev/demos/cascade.gif)
 
@@ -540,14 +543,16 @@ if err != nil {
 }
 ok := c.Explicit("environment")   // user-supplied (CLI, env, or prompt)?
 raw := c.Args()                   // raw positional args as []string
-interactive := c.IsInteractive()  // true when stdin and stdout are both TTYs
+interactive := c.CanPrompt()  // true when stdin and stderr are both TTYs
 ```
 
 ### Prompts
 
 When a positional arg is not given on the command line or through an env var, Nabat can ask the user with a prompt.
-Prompts only run when stdin and stdout are both terminals (`c.IsInteractive()`).
-In CI or pipes, Nabat falls back to the default or returns an error if the arg is required.
+Prompts only run when stdin and stderr are both terminals (`c.CanPrompt()`).
+Piped stdout does not disable prompts. When prompting is unavailable, Nabat
+uses the documented fallback for that API, or returns an error if the arg is
+required.
 
 `WithPrompt` attaches an interactive prompt to any arg. T is inferred from the
 sub-options' value arguments; no explicit type annotation is required:
@@ -1363,7 +1368,7 @@ if err != nil {
 ### Common Pitfalls
 
 **Prompts do not appear in CI or piped scripts.**
-Nabat only shows interactive prompts when stdin and stdout are both terminals. In CI, piped input, or non-interactive shells, the prompt step is skipped and Nabat uses the default value, or returns an error if `WithRequired()` was set. Supply the value via a CLI arg or add `WithEnv("KEY")` so it can come from an environment variable.
+Nabat only shows interactive prompts when stdin and stderr are both terminals (`c.CanPrompt()`). Piped stdout does not disable prompts. In CI, piped stderr, or non-interactive shells, the prompt step is skipped. Each prompt API has its own fallback; `WithRequired()` still needs a CLI token, env var, or completed prompt. Constructor defaults do not satisfy it.
 
 **`c.Success`, `c.Warn`, `c.Error`, and `c.Info` output is not in stdout.**
 These four helpers write to **stderr** (`errOut`), not stdout, so that piped stdout stays clean. Spinner, Status, and ProgressBar also write to stderr. In tests, name all four return values of `nabattest.NewIO()`:
@@ -1512,7 +1517,7 @@ Test run options:
 | `nabattest.WithContext(ctx)` | Set a custom context.                      |
 | `nabattest.WithEnvVars(map)` | Set env vars for the run (restored after). |
 
-Use `nabattest.NewTTYIO()` instead of `nabattest.NewIO()` when the code under test uses prompts, spinners, Status displays, `c.IsInteractive()`, or any other code path that checks whether streams are terminals. `NewTTYIO()` marks all three streams as TTY; `NewIO()` marks them as non-TTY (the safe default for most tests).
+Use `nabattest.NewTTYIO()` instead of `nabattest.NewIO()` when the code under test uses prompts, spinners, Status displays, `c.CanPrompt()`, or any other code path that checks whether streams are terminals. `NewTTYIO()` marks all three streams as TTY; `NewIO()` marks them as non-TTY (the safe default for most tests).
 
 For parallel tests, use `nabattest.RunParallel` instead of `nabattest.Run`.
 Note: `WithEnvVars` is not allowed with `RunParallel`.

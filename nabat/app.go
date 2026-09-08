@@ -609,7 +609,7 @@ func (a *App) NewBareContext() *Context {
 		interactive: false,
 	}
 	if a.io != nil {
-		ctx.interactive = a.io.IsInteractive()
+		ctx.interactive = CanPrompt(a.io)
 	}
 	if a.cfg.logger != nil {
 		ctx.logger = a.cfg.logger

@@ -465,7 +465,8 @@ func WithArg[T ArgValue](name string, defaultVal T, opts ...ArgOption) RootOptio
 }
 
 // WithSelectArg defines one positional select argument. defaultVal must be in
-// choices (or empty with [WithRequired]). Add [WithPrompt] for TTY prompting.
+// choices (or empty with [WithRequired]). Add [WithPrompt] for prompt-capable
+// terminals (stdin and stderr TTY).
 // Read the value with [Context.Bind] or [BindAs].
 //
 // Example:
@@ -486,7 +487,8 @@ func WithSelectArg(name, defaultVal string, choices []string, opts ...ArgOption)
 
 // WithMultiSelectArg defines one positional multi-select argument. defaultVal
 // items must be in choices (or nil with [WithRequired]). Add [WithPrompt] for
-// TTY prompting. Read the value with [Context.Bind] or [BindAs].
+// prompt-capable terminals (stdin and stderr TTY). Read the value with
+// [Context.Bind] or [BindAs].
 func WithMultiSelectArg(name string, defaultVal, choices []string, opts ...ArgOption) RootOption {
 	return rootOpt{fn: func(c *commandSpec) error {
 		s, err := applyArgOptions(opts)

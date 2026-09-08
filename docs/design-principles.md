@@ -34,8 +34,8 @@ own. No extra flag to "fix" output for the environment.
 **In practice:**
 
 - `Success`, `Warn`, `Error`, and `Info` write to stderr and use the theme.
-- Prompts run only when stdin and stdout are both terminals. In CI you get env,
-  defaults, or a clear error.
+- Prompts run only when stdin and stderr are both terminals. Piped stdout does
+  not disable them. In CI you get env, a documented fallback, or a clear error.
 - Themes start conservative. Richer palettes are opt-in.
 
 **Example:**
@@ -124,9 +124,11 @@ Positional args resolve through that cascade. The first source that provides a v
 
 **In practice:**
 
-- On a real terminal (a TTY), output gets color and prompts ask the user for missing values.
-- When stdout is piped or stderr is a CI log, color is stripped. Prompts are skipped. The
-  framework reads env vars or defaults instead.
+- Color follows color policy. Prompts ask for missing values when stdin and
+  stderr are both terminals.
+- When stderr is not a TTY, prompts are skipped. The framework reads env vars
+  or the documented fallback instead. Piped stdout does not by itself skip
+  prompts.
 - In tests, buffer-backed IO means non-interactive mode and no escape codes. The same
   command code runs the same way in production and in tests.
 

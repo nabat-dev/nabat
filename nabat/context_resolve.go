@@ -101,7 +101,7 @@ func (a *App) resolveFlags(c *Context) error {
 			continue
 		}
 		if fl.config.required {
-			return fmt.Errorf("nabat: required flag --%s is missing (flag/env/default)", fl.name)
+			return fmt.Errorf("nabat: required flag --%s is missing (flag/env)", fl.name)
 		}
 	}
 

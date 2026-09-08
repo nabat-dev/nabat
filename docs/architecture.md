@@ -241,15 +241,18 @@ Context (created per invocation)
 ├── passthroughArgs ([]string: args after "--"; nil when "--" absent)
 ├── values (map[string]any: resolved args + flags)
 ├── set (map[string]bool: true when value came from arg/env/prompt, not a default)
-└── interactive (bool: IO.IsInteractive() at construction time: stdin and stdout are both TTYs)
+└── interactive (bool: CanPrompt(IO) at construction time: stdin and stderr are both TTYs)
 
 IOStreams
 ├── In (io.Reader: raw input)
 ├── Out (io.Writer: colorprofile-wrapped stdout, preserves Fd())
 ├── ErrOut (io.Writer: colorprofile-wrapped stderr, preserves Fd())
 ├── Methods: IsStdinTTY/IsStdoutTTY/IsStderrTTY, SetXxxTTY (overrides for tests),
-│            IsInteractive, TerminalWidth, TerminalHeight, Err (joins Out and ErrOut sticky errors), RawIn/RawOut/RawErrOut
-└── Constructors: NewSystemIO() (os.Stdin/Stdout/Stderr), NewIO(in,out,err); nabattest.NewIO() returning bundle + 3 buffers
+│            IsInteractive (termio: stdin and stdout TTY; not Nabat prompt policy),
+│            TerminalWidth, TerminalHeight, Err (joins Out and ErrOut sticky errors),
+│            RawIn/RawOut/RawErrOut
+└── Constructors: NewSystemIO() (os.Stdin/Stdout/Stderr), NewIO(in,out,err); nabattest.NewIO()
+    Prompt policy: nabat.CanPrompt(io) and Context.CanPrompt() require stdin and stderr TTY
 ```
 
 ## Execution Lifecycle
@@ -259,20 +262,19 @@ When `App.Run(ctx)` is called, execution follows this sequence:
 ```text
 App.Run(ctx)
 │
-├── 1. Re-attach RunE for all commands
-│       Ensures globalPreRun hooks registered by extensions during Extend() are wired in
-│
-├── 2. Cobra executes (root.ExecuteContextC)
+├── 1. Cobra executes (root.ExecuteContextC)
 │       Parses os.Args (or args from RunArgs), matches a command, parses flags
+│       Command RunE was wired at construction (attachRunE)
 │
-└── 3. Nabat's RunE pipeline (per matched command)
+└── 2. Nabat's RunE pipeline (per matched command)
         │
-        ├── a. Build Context (newContext)
-        │       Detect interactivity (stdin and stdout both TTY)
+        ├── a. Build Context (newContext) in root PersistentPreRunE
+        │       Detect prompt capability (CanPrompt: stdin and stderr both TTY)
         │       Resolve positional args (see Arg Resolution Flow below)
         │       Resolve flags including persistent flags from ancestors
         │
         ├── b. Global preRun hooks (App.OnPreRun)
+        │       Includes hooks registered by extensions during Extension.Init
         │       Run each func(*Context) error in registration order
         │       If any returns ErrHandled → short-circuit with nil (success)
         │       Stop on first non-ErrHandled error
@@ -312,7 +314,7 @@ For each arg defined on the command, Nabat tries sources in order:
          │ no
 2. Environment var →  `WithEnv` set and env var set and non-empty?  →  parse and use
          │ no
-3. Interactive prompt →  TTY and a WithXxxPrompt is attached?  →  prompt user
+3. Interactive prompt →  CanPrompt (stdin and stderr TTY) and a prompt is attached?  →  prompt user
          │ no
 4. Required check  →  `WithRequired()` set?            →  return error
          │ no
@@ -321,8 +323,9 @@ For each arg defined on the command, Nabat tries sources in order:
 6. Skip            →  value stays absent from context
 ```
 
-The constructor `defaultVal` is the only non-interactive fallback for
-declarative args.
+The constructor `defaultVal` is the non-prompt fallback for declarative
+args. `WithRequired` rejects that default: a required arg must come from
+CLI, env, or a prompt.
 
 Environment resolution is **opt-in** per field and split into two explicit
 options:
@@ -348,9 +351,9 @@ Flags follow a simpler cascade:
          │ no
 2. Environment →  `WithEnv` set and env var set and non-empty? →  parse and use
          │ no
-3. Default     →  constructor `defaultVal` on `WithFlag` / `WithSelectFlag` / ...  →  use default
+3. Required    →  WithRequired() was set? →  return error
          │ no
-4. Required    →  WithRequired() was set? →  return error
+4. Default     →  constructor `defaultVal` on `WithFlag` / `WithSelectFlag` / ...  →  use default
          │ no
 5. Skip        →  value stays absent from context
 ```
@@ -358,7 +361,8 @@ Flags follow a simpler cascade:
 > [!NOTE]
 > Flags do not support interactive prompts. This is enforced at compile time:
 > `FlagOption` cannot take prompt-shaping options (those exist only as
-> `ArgOption`).
+> `ArgOption`). `WithRequired` on a flag also ignores the constructor
+> default: the value must come from the CLI or the environment.
 
 `Context` implements `context.Context`, so handlers can use `c` directly for
 cancellation, timeouts, and value propagation.
@@ -371,8 +375,20 @@ sticky-error state. A write error on stdout does not poison stderr, and a write
 error on stderr does not poison stdout. `IOStreams.Err()` joins whatever errors
 the two streams have latched.
 
-Nabat's internal `writer` wrapper is constructed per call around one of those
-streams. It is not a single per-Context writer.
+Static output helpers generally write through `IOStreams.Out` or
+`IOStreams.ErrOut` and inherit that stream's sticky-error and color-policy
+behavior. Nabat's internal `writer` wrapper is constructed per call around
+one of those streams for helpers such as `Print`, `Success`, `Table`, and
+`JSON`. It is not a single per-Context writer.
+
+Live terminal renderers may use the raw stderr stream directly and report
+failures through their own return path:
+
+- Spinner TTY animation writes to `RawErrOut()`
+- Status Bubble Tea rendering writes to `RawErrOut()`
+- Huh prompts and forms write to `RawErrOut()`
+- ProgressBar owns a writer over the bar's lifetime rather than wrapping
+  every update in a fresh helper
 
 Command product (stdout):
 
@@ -381,10 +397,11 @@ Command product (stdout):
 - `JSON` / `YAML` / `TOML`
 - `Encode` / `Highlight` / `Markdown`
 
-Human status and progress (stderr):
+Human status, progress, and interaction (stderr):
 
 - `Success` / `Warn` / `Error` / `Info`
 - `Spinner` / `Status` / `ProgressBar`
+- Huh prompts and forms (`Confirm`, `Form`, `Input`, and related APIs)
 
 Diagnostic logging: `Context.Logger()` returns the installed `*slog.Logger`.
 Install one with `nabat.WithLogger` or `nabat.WithExtension(logging.New(...))`.
@@ -397,9 +414,11 @@ TTY state and color policy are separate dimensions.
 
 TTY state (stdin, stdout, and stderr, tracked independently) controls
 terminal-specific behavior such as live rewriting and animation. Prompting
-requires `IOStreams.IsInteractive()` (stdin and stdout both TTY), which is
-more than "a stream is a TTY". Spinner, Status, and ProgressBar key off
-stderr TTY, not prompt interactivity.
+requires `CanPrompt` (stdin and stderr both TTY), which is more than "a
+stream is a TTY". Piped stdout does not disable prompts when stderr is
+still a TTY. Spinner, Status, and ProgressBar key off stderr TTY, not
+prompt capability. `theme.Capabilities.Interactive` remains stdout TTY
+state for theme resolution and is not this prompt check.
 
 Color is governed by detected color capability and user color policy
 (`NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`). `NewSystemIO` /

@@ -183,8 +183,12 @@ func applyFlagOptions(opts []FlagOption) (flagSpec, error) {
 // does not accept either interface (e.g. as a [CommandOption]) fails at
 // compile time.
 
-// WithRequired marks an arg or flag as required; resolution fails if no value
-// is found from CLI, env, prompt, or default.
+// WithRequired requires the value to come from a non-default source.
+// Constructor defaults do not satisfy it.
+//
+// For positional args, a CLI token, environment variable, or interactive
+// prompt satisfies the requirement. For flags, a CLI flag or environment
+// variable satisfies it. Flags never prompt.
 //
 // Example:
 //

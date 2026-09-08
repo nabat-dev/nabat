@@ -244,7 +244,7 @@ Nabat maintains a deliberate separation between:
 
 ```text
 stdout → command product / machine-consumable output
-stderr → human status / diagnostics / interactive progress
+stderr → human status / diagnostics / interaction / progress
 ```
 
 A user should be able to pipe command output into another program without status messages corrupting the stream.
@@ -265,7 +265,7 @@ non-TTY
 interactive TTY
 ```
 
-TTY state determines whether live rewriting and animation are possible. stdin, stdout, and stderr TTY state are tracked independently. Prompting requires an interactive terminal, which is more than "a stream is a TTY".
+TTY state determines whether live rewriting and animation are possible. stdin, stdout, and stderr TTY state are tracked independently. Prompting requires stdin and stderr to both be TTYs (`CanPrompt`). Stdout TTY state is a separate fact used for theme resolution (`theme.Capabilities.Interactive`), not for prompt availability.
 
 Color capability / policy:
 
@@ -293,7 +293,7 @@ These inputs are related. They do not mean the same thing.
 Nabat degrades each capability on its own:
 
 - animation and live rewriting depend on TTY capability;
-- prompting depends on interactivity;
+- prompting depends on stdin and stderr TTY capability;
 - color depends on color capability and color policy;
 - semantic meaning must survive when any of these capabilities are absent.
 
@@ -1051,7 +1051,7 @@ They are a prompt presentation choice rather than a universal requirement for ev
 
 ### 20.5 Non-Interactive Behavior
 
-Prompt presentation applies only when the command is interactive.
+Prompt presentation applies only when stdin and stderr are both terminals.
 
 When interaction is unavailable, each prompt API follows its documented fallback, default, bypass, or error behavior. A command must never depend on an interactive prompt as its only automation path.
 
