@@ -2,7 +2,7 @@
 
 # Nabat
 
-*From Persian نبات "rock candy"; /næˈbɑːt/ (nah-BAHT).*
+*From Persian نبات (nabât), "rock candy"; English approximation nah-BAHT.*
 
 **Adaptive CLI framework for Go.**
 Typed args, structured output, and themes on top of Cobra.
@@ -73,7 +73,7 @@ Nabat is an adaptive CLI framework for Go: typed positional args that resolve fr
 The name comes from Persian rock candy.
 Sugar crystals grow slowly around a simple thread.
 Nabat works the same way: start with a strong core, then add layers one by one.
-Read more in the [Brand Story](#brand-story).
+Read more in the [Brand Story](#brand-story) and the [design contract](DESIGN.md).
 
 ![Deploy](https://nabat.dev/demos/deploy.gif)
 
@@ -127,7 +127,7 @@ The module is `nabat.dev`. The core package and optional features live in subpac
 ```go
 import (
     "nabat.dev/nabat"      // core: app, commands, args, output, IOStreams, themes, help, version, completion
-    "nabat.dev/theme"      // theme constants and recipes
+    "nabat.dev/theme"      // theme constants and resolvers
     "nabat.dev/manpage"    // man page generation (extension)
     "nabat.dev/logging"    // themed slog logger (extension)
     "nabat.dev/nabat/nabattest"  // test helpers: NewIO, NewTTYIO, Run, Capture, Context
@@ -1622,6 +1622,7 @@ Fork the repository, create a branch from `main`, make your changes, and open a 
 CI runs format checks, lint, and the full test suite with race detection; all must pass before merge.
 Please read these documents before you open a PR:
 
+- [Design System](DESIGN.md)
 - [Design Principles](docs/design-principles.md)
 - [Architecture](docs/architecture.md)
 - [Documentation Standards](docs/documentation-standards.md)
