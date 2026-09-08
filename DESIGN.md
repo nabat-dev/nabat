@@ -91,11 +91,9 @@ The product name is **Nabat**.
 
 Pronunciation:
 
-Iranian Persian (formal): `[næ.bɒ́ːt]`
+Persian: **نبات** (nabât)
 
 English approximation: **nah-BAHT**
-
-The English form is an approximation. It is not Persian IPA.
 
 Origin:
 
@@ -333,6 +331,7 @@ Design decisions should account for:
 - CI logs;
 - Unicode availability;
 - color policy;
+- reduced-motion capability;
 - non-interactive environments.
 
 The website may extend the visual language, but it should not redefine the CLI.
@@ -561,7 +560,9 @@ spinner.active
 status.active
 ```
 
-These identify actively running state rather than completed semantic state.
+These identify actively running indicators rather than completed semantic state.
+
+`spinner.active` styles the live spinner frame. `status.active` styles the spinner icon on an active Status row, not the row text.
 
 ---
 
@@ -867,17 +868,17 @@ Tree structure must remain legible in plain text.
 
 ### 17.1 Behavior
 
-On an interactive terminal:
+When stderr is a TTY:
 
 - the operation may animate;
 - the active frame uses `spinner.active`;
 - the title uses the informational semantic style;
-- completion resolves to an appropriate static semantic icon.
+- completion resolves to a static semantic icon.
 
-On non-TTY output:
+When stderr is not a TTY:
 
 - no animation is emitted;
-- the title is printed plainly;
+- the title is printed once;
 - the operation runs normally.
 
 ### 17.2 Delayed Animation
@@ -898,7 +899,27 @@ Alternative spinner shapes are implementation options rather than brand identity
 
 ---
 
-## 18. Multi-Row Status
+## 18. Progress Bar
+
+`Context.ProgressBar` represents finite progress.
+
+It writes to stderr so it does not corrupt piped stdout.
+
+When stderr is a TTY:
+
+- it renders progress in place;
+- theme styling may be applied.
+
+When stderr is not a TTY:
+
+- it emits stable textual progress such as `[current/total]`;
+- it does not rely on terminal rewriting.
+
+Progress must remain readable without animation. Finite progress, stderr ownership, and a stable non-TTY form are the contract. Exact themed colors are an implementation of that contract, not a second palette.
+
+---
+
+## 19. Multi-Row Status
 
 `Context.Status` handles concurrent or multi-step work.
 
@@ -910,14 +931,14 @@ Conceptually:
     OBJECT      REASON       AGE
  ✓  api          ready        4s
  !  worker       retrying     2s
-    ⠋  database     migrating    1s
+ ⠋  database     migrating    1s
 ```
 
 AGE is included by default unless the caller disables elapsed time.
 
-### 18.1 TTY
+### 19.1 TTY
 
-On a TTY, Status may:
+When stderr is a TTY, Status may:
 
 - animate active rows;
 - update rows in place;
@@ -926,9 +947,9 @@ On a TTY, Status may:
 - show a completion state;
 - adapt to terminal height.
 
-### 18.2 Non-TTY
+### 19.2 Non-TTY
 
-On non-TTY output:
+When stderr is not a TTY:
 
 - animation disappears;
 - the title is plain text;
@@ -936,15 +957,12 @@ On non-TTY output:
 
 Logs should remain readable after the process ends.
 
-### 18.3 State Communication
+### 19.3 State Communication
 
-Completed rows use semantic state styling.
+Completed rows use semantic state styling for icons and text.
 
-Active state uses:
-
-```text
-status.active
-```
+Active Status rows use `status.active` for the animated state indicator.
+Active row text remains neutral unless explicitly styled.
 
 State must never depend on color alone.
 
@@ -952,7 +970,7 @@ Static glyphs remain part of the information architecture.
 
 ---
 
-## 19. Interactive Prompts
+## 20. Interactive Prompts
 
 Nabat's prompt styling is built around a small semantic surface rather than exposing every low-level field of the underlying prompt library.
 
@@ -981,7 +999,7 @@ border
 border color
 ```
 
-### 19.1 Default Semantic Mapping
+### 20.1 Default Semantic Mapping
 
 When a prompt style is derived from tokens, the intended relationships are:
 
@@ -1008,13 +1026,13 @@ ButtonBlurred    → text.muted
 BorderColor      → accent.primary
 ```
 
-### 19.2 Selection
+### 20.2 Selection
 
 Selection should be communicated through more than color.
 
 Nabat's brand theme uses explicit selected/unselected markers so a user can identify state in plain text.
 
-### 19.3 Focus
+### 20.3 Focus
 
 Focus may be represented through:
 
@@ -1025,13 +1043,13 @@ Focus may be represented through:
 
 A color change alone is insufficient.
 
-### 19.4 Borders
+### 20.4 Borders
 
 Rounded prompt borders fit the Nabat visual language and may be used by the brand theme.
 
 They are a prompt presentation choice rather than a universal requirement for every Nabat output component.
 
-### 19.5 Non-Interactive Behavior
+### 20.5 Non-Interactive Behavior
 
 Prompt presentation applies only when the command is interactive.
 
@@ -1039,7 +1057,7 @@ When interaction is unavailable, each prompt API follows its documented fallback
 
 ---
 
-## 20. Help Output
+## 21. Help Output
 
 Nabat's help renderer should feel structured, calm, and scannable.
 
@@ -1074,9 +1092,9 @@ Alignment, spacing, and grouping should do most of the visual work.
 
 ---
 
-## 21. Typography
+## 22. Typography
 
-### 21.1 Actual CLI
+### 22.1 Actual CLI
 
 Nabat does not control the user's terminal font.
 
@@ -1088,7 +1106,7 @@ Therefore:
 
 Standard Unicode symbols may be used when they have reliable terminal support, with plain-text degradation where necessary.
 
-### 21.2 Documentation and Screenshots
+### 22.2 Documentation and Screenshots
 
 For controlled Nabat-owned surfaces, the preferred monospace stack is:
 
@@ -1109,7 +1127,7 @@ JetBrains Mono is the preferred first choice for:
 - code screenshots;
 - diagrams containing code or CLI output.
 
-### 21.3 Website Interface Typography
+### 22.3 Website Interface Typography
 
 For documentation and web interface text:
 
@@ -1131,13 +1149,13 @@ Typography recommendations apply only to surfaces Nabat controls.
 
 ---
 
-## 22. Logo Direction — "The Crystal Thread"
+## 23. Logo Direction — "The Crystal Thread"
 
 This section defines the visual direction for the Nabat identity.
 
 Until canonical logo assets are committed, it should be interpreted as a brand specification rather than a pixel-perfect asset contract.
 
-### 22.1 Core Elements
+### 23.1 Core Elements
 
 The logo language should combine:
 
@@ -1145,7 +1163,7 @@ The logo language should combine:
 2. a CLI prompt or directional mark;
 3. a growing geometric crystal.
 
-### 22.2 The Thread
+### 23.2 The Thread
 
 The thread represents Cobra.
 
@@ -1159,7 +1177,7 @@ Recommended characteristics:
 
 It should feel structural rather than decorative.
 
-### 22.3 CLI Chevron
+### 23.3 CLI Chevron
 
 A `>` form may be integrated into the thread or crystal.
 
@@ -1167,7 +1185,7 @@ It represents the command-line interface without relying on a generic terminal-w
 
 The chevron should remain recognizable at small sizes.
 
-### 22.4 Crystal
+### 23.4 Crystal
 
 The crystal is the primary Nabat element.
 
@@ -1182,7 +1200,7 @@ Recommended characteristics:
 
 The form should suggest growth around the thread.
 
-### 22.5 Highlights and Satellite Crystals
+### 23.5 Highlights and Satellite Crystals
 
 Larger illustrations may include:
 
@@ -1193,7 +1211,7 @@ Larger illustrations may include:
 
 These elements should disappear in small logo variants.
 
-### 22.6 Required Logo Variants
+### 23.6 Required Logo Variants
 
 The identity should eventually provide at least:
 
@@ -1245,7 +1263,7 @@ Nabat
 
 The wordmark should preserve enough whitespace to keep the crystal geometry distinct.
 
-### 22.7 Logo Restraints
+### 23.7 Logo Restraints
 
 Avoid:
 
@@ -1260,7 +1278,7 @@ The cultural reference should come primarily from the concept, palette, and mate
 
 ---
 
-## 23. Broader Visual Language
+## 24. Broader Visual Language
 
 The crystal metaphor should extend beyond the logo without turning every component into a crystal.
 
@@ -1294,11 +1312,11 @@ Rounded UI may still be used where functionally appropriate, particularly for pr
 
 ---
 
-## 24. Website Design Direction
+## 25. Website Design Direction
 
 The future `nabat.dev` website should express the same system as the CLI without pretending the browser is a terminal.
 
-### 24.1 Relationship to the CLI
+### 25.1 Relationship to the CLI
 
 The website may be richer than the terminal, but it should preserve:
 
@@ -1310,13 +1328,13 @@ The website may be richer than the terminal, but it should preserve:
 - terminal examples;
 - technical restraint.
 
-### 24.2 Dark and Light
+### 25.2 Dark and Light
 
 The website should support both Nabat Dark and Nabat Light.
 
 Theme values should come from the canonical Palette rather than copied hex literals maintained independently in the website source.
 
-### 24.3 Semantic Web Tokens
+### 25.3 Semantic Web Tokens
 
 The website should introduce a semantic layer such as:
 
@@ -1347,7 +1365,7 @@ interaction.disabled
 
 Those semantic roles should resolve to Nabat Palette values.
 
-A role name does not by itself prove a foreground/background pair meets the contrast targets in [Accessibility](#25-accessibility).
+A role name does not by itself prove a foreground/background pair meets the contrast targets in [Accessibility](#26-accessibility).
 
 Components should consume semantic variables rather than raw palette names.
 
@@ -1375,7 +1393,7 @@ over coupling components directly to:
 --nabat-pistachio
 ```
 
-### 24.4 Generated Tokens
+### 25.4 Generated Tokens
 
 Where practical, web artifacts should be generated from the machine-readable Palette.
 
@@ -1394,11 +1412,11 @@ This prevents the website from becoming another palette authority.
 
 ---
 
-## 25. Accessibility
+## 26. Accessibility
 
 Accessibility requirements apply across terminal, documentation, and web surfaces.
 
-### 25.1 Never Use Color Alone
+### 26.1 Never Use Color Alone
 
 A success state must still look like success without green.
 
@@ -1406,7 +1424,7 @@ An error must still look like an error without red.
 
 Use symbols and text alongside color.
 
-### 25.2 Plain-Text Equivalence
+### 26.2 Plain-Text Equivalence
 
 A user viewing:
 
@@ -1417,7 +1435,7 @@ A user viewing:
 
 must still receive meaningful output.
 
-### 25.3 Contrast
+### 26.3 Contrast
 
 For Nabat-controlled web and documentation surfaces, target [WCAG 2.2](https://www.w3.org/TR/WCAG22/) Level AA:
 
@@ -1433,15 +1451,17 @@ Consumers must not invent ad-hoc replacement colors locally.
 
 Dark and light variants may use different color values specifically to preserve semantic identity while maintaining readability.
 
-### 25.4 Animation
+### 26.4 Animation
 
 Animation should communicate active work, not decorate idle states.
 
 Short operations should avoid unnecessary animation.
 
-Non-interactive environments should receive stable output rather than animation escape sequences.
+Non-TTY diagnostic output should receive stable output rather than terminal rewrite sequences.
 
-### 25.5 Unicode
+Nabat models reduced-motion as a terminal capability (`Capabilities.ReducedMotion`). Detection uses environment signals such as `NABAT_REDUCED_MOTION`, `REDUCE_MOTION`, and `NO_MOTION`. Components that animate should respect that capability where they support it.
+
+### 26.5 Unicode
 
 Unicode symbols are welcome where they provide useful semantic structure.
 
@@ -1449,7 +1469,7 @@ However, the system should not depend on private glyph sets or Nerd Font icons f
 
 ---
 
-## 26. Design Rules for New CLI Components
+## 27. Design Rules for New CLI Components
 
 When adding a new user-facing component to Nabat, use the following sequence.
 
@@ -1522,13 +1542,13 @@ Do not choose a stream based merely on convenience.
 
 Add text, structure, glyphs, or other non-color state cues.
 
-### Step 7 — Test Narrow and Non-Interactive Environments
+### Step 7 — Test Narrow, Non-TTY, and Non-Interactive Environments
 
-Terminal UX is incomplete until the component remains useful outside an ideal interactive terminal.
+Terminal UX is incomplete until the component remains useful outside an ideal TTY and outside an interactive session.
 
 ---
 
-## 27. Design Governance
+## 28. Design Governance
 
 Changes should be made in the repository that owns the concept.
 
@@ -1596,7 +1616,7 @@ nabat-dev/palette
 
 ---
 
-## 28. Current vs Proposed Design
+## 29. Current vs Proposed Design
 
 This document distinguishes between two categories.
 
@@ -1633,7 +1653,7 @@ When a proposed design becomes implemented and stable, this document should be u
 
 ---
 
-## 29. Design System Summary
+## 30. Design System Summary
 
 The complete Nabat design architecture can be viewed as:
 
@@ -1689,7 +1709,7 @@ The essential rule is:
 
 ---
 
-## 30. Final Principles
+## 31. Final Principles
 
 When making a design decision for Nabat, prefer the choice that preserves these properties:
 
