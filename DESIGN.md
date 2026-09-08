@@ -1459,7 +1459,9 @@ Short operations should avoid unnecessary animation.
 
 Non-TTY diagnostic output should receive stable output rather than terminal rewrite sequences.
 
-Nabat models reduced-motion as a terminal capability (`Capabilities.ReducedMotion`). Detection uses environment signals such as `NABAT_REDUCED_MOTION`, `REDUCE_MOTION`, and `NO_MOTION`. Components that animate should respect that capability where they support it.
+Nabat models reduced-motion as a terminal capability (`Capabilities.ReducedMotion`). Detection uses environment signals such as `NABAT_REDUCED_MOTION`, `REDUCE_MOTION`, and `NO_MOTION`. Reduced-motion capability is currently detected and exposed to theme resolution. Direct suppression of Spinner/Status animation based on that capability is not yet part of the current component runtime contract.
+
+New or updated animated components should respect reduced-motion capability when that behavior is implemented.
 
 ### 26.5 Unicode
 

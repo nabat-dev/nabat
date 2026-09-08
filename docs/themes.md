@@ -32,8 +32,8 @@ nabat ──► nabat/theme  (leaf + catalog)
 
 | Package        | Role                                                                                                       |
 |----------------|------------------------------------------------------------------------------------------------------------|
-| `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Recipe` interface; embedded JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
-| `nabat.dev`    | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Recipe)` accepts any `Recipe` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities`, calls `Theme.Resolve(caps)`, and pins the resulting `theme.ResolvedTheme` for the lifetime of the app. `App.Theme()` returns it. |
+| `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Resolver` interface; embedded JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
+| `nabat.dev`    | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Resolver)` accepts any `Resolver` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities` and pins a `theme.ResolvedTheme` for the lifetime of the app. For a concrete `theme.Theme`, finalize uses `Theme.ResolveErr`; other resolvers have only `Resolve`. `App.Theme()` returns the pinned result. |
 
 `theme.Theme` is data, not a function. It holds one `Palette` per variant, a
 default variant when capabilities do not pin one, and a few cross-variant
@@ -75,8 +75,8 @@ The catalog shipped with Nabat:
 
 | Constant                    | Manifest                         | Best for                                                                                          |
 |-----------------------------|----------------------------------|---------------------------------------------------------------------------------------------------|
-| `theme.Default`             | `data/default.json`              | Capability-aware default; defers to detected color profile and background luminance.              |
-| `theme.Minimal`             | `data/minimal.json`              | Bold-only, no foreground colors. Single `notty` variant.                                          |
+| `theme.Default`             | `data/default.json`              | Capability-aware default with dark, light, and notty variants. Variant selection follows primary-output TTY state and detected background luminance; output color depth is adapted separately. |
+| `theme.Minimal`             | `data/minimal.json`              | Low-color, single `notty` variant. Status and accent roles primarily rely on bold styling, while text, link, and code roles use neutral foreground and background primitives. |
 | `theme.Charm`               | `data/charm.json`                | Higher-contrast Charm.land palette for dark terminals.                                            |
 | `theme.Dracula`             | `data/dracula.json`              | Dracula Classic (dark) and Alucard Classic (light).                                               |
 | `theme.Gruvbox`             | `data/gruvbox.json`              | morhetz/gruvbox dark and light.                                                                   |
@@ -130,12 +130,12 @@ Notes:
   wins. There is no mutual-exclusion check.
 - For palette choices that depend on runtime `Capabilities` in a way a
   per-variant `Palette` cannot express, implement the
-  `theme.Recipe` interface directly:
+  `theme.Resolver` interface directly:
 
   ```go
-  type myRecipe struct{}
-  func (myRecipe) Resolve(c theme.Capabilities) theme.ResolvedTheme {
-      // pick a Palette / Theme based on c.Profile, c.BackgroundHex, ...
+  type myResolver struct{}
+  func (myResolver) Resolve(c theme.Capabilities) theme.ResolvedTheme {
+      // pick a Palette / Theme based on c.Dark, c.Interactive, ...
       // and return its Resolve(c) result.
   }
   ```
@@ -177,7 +177,7 @@ capabilities pick.
 
 > [!WARNING]
 > Overrides are silently ignored when the active theme is a bespoke
-> `theme.Recipe` (anything other than a `theme.Theme` value). The recipe's
+> `theme.Resolver` (anything other than a `theme.Theme` value). The resolver's
 > `Resolve` method is opaque, so the framework cannot apply per-`Palette`
 > overrides into it.
 
@@ -238,8 +238,15 @@ Multi-variant example:
   "name": "myapp",
   "default": "dark",
   "variants": {
-    "dark":  { "primitives": { "fg": "#FFFFFF", "bg": "#000000" }, "tokens": { ... }, "huh": "charm" },
-    "light": { "primitives": { "fg": "#000000", "bg": "#FFFFFF" }, "tokens": { ... } }
+    "dark": {
+      "primitives": { "fg": "#FFFFFF", "bg": "#000000" },
+      "tokens": { "text.primary": { "$primitive": "fg" } },
+      "huh": "charm"
+    },
+    "light": {
+      "primitives": { "fg": "#000000", "bg": "#FFFFFF" },
+      "tokens": { "text.primary": { "$primitive": "fg" } }
+    }
   }
 }
 ```
@@ -362,8 +369,13 @@ An empty value disables the framework default for that key:
 "aliases": { "table.border": "" }
 ```
 
-Cycles (alias chains that loop) surface as a hard error from
-`Theme.Resolve` so authoring mistakes never reach the lookup path.
+Cycles (alias chains that loop) are reported by `Theme.ResolveErr`.
+`Theme.Resolve` intentionally discards resolution errors; callers that
+need diagnostics should use `Theme.ResolveErr`.
+
+When a concrete `theme.Theme` is installed on a Nabat App, `App.finalize`
+uses `ResolveErr`, so the error fails app construction rather than
+reaching the first `Style` lookup.
 
 ## Optional Fields and Defaults
 
@@ -460,7 +472,7 @@ when the closed `Prompt` surface is not enough.
 
 ## JSON Schema
 
-The schema lives in two places that must agree:
+The schema lives in two places that should agree:
 
 - **In-repo source of truth:** [`theme/schema/v1.json`](../theme/schema/v1.json).
   Embedded into the binary via `//go:embed`; exposed through
@@ -469,7 +481,8 @@ The schema lives in two places that must agree:
   same bytes, served from the project's website. Manifests reference
   this URL in the `$schema` field; editors fetch it for validation.
 
-Drift between the two is impossible to commit by accident:
+Repository tests keep the embedded schema, its public `$id`, and bundled
+manifests internally consistent.
 
 - `TestSchemaIDMatchesPublicURL` pins the `$id` field inside the
   document to the public URL constant. Renaming either the file or
@@ -477,6 +490,9 @@ Drift between the two is impossible to commit by accident:
 - `TestManifestsMatchSchema` validates every embedded manifest
   against the embedded schema. A schema change that breaks an
   existing manifest fails the build.
+
+Publishing the same schema bytes at the public URL is a release/hosting
+responsibility and is not verified by these unit tests.
 
 ## Schema Hosting
 
@@ -527,9 +543,9 @@ Go file, no registry call, no `init()` hook to wire.
 
 If the styling you want cannot be expressed as a manifest (for example
 a `huh.Theme` closure that varies on `Capabilities`), implement the
-`theme.Recipe` interface from your application and pass it to
+`theme.Resolver` interface from your application and pass it to
 `nabat.WithCustomTheme(...)` instead. That path keeps a programmatic
-recipe out of the built-in catalog without requiring a registration
+resolver out of the built-in catalog without requiring a registration
 API.
 
 The schema can be exercised against hand-written manifests using
@@ -540,20 +556,33 @@ compiler. See `theme/catalog_test.go` for the canonical pattern.
 ## Capabilities
 
 `theme.Capabilities` is the snapshot of terminal facts the framework
-detects once at `App.finalize` time and passes to `Theme.Resolve`:
+detects once at `App.finalize` time and passes to theme resolution:
 
 ```go
 type Capabilities struct {
     Dark           bool                 // dark terminal background
     BackgroundHex  string               // exact background color when detectable
     Profile        colorprofile.Profile // active color profile of stdout
-    Interactive    bool                 // primary output is a TTY and input allows prompting
+    Interactive    bool                 // primary output stream is a TTY
     Width          int                  // terminal width in cells; 0 when unknown
     Hyperlinks     bool                 // OSC 8 supported
     Unicode        UnicodeLevel         // ASCII / Wide / Emoji
-    ReducedMotion  bool                 // suppress animations
+    ReducedMotion  bool                 // reduced-motion preference was detected
 }
 ```
+
+`Interactive` reports whether the primary output stream is a TTY for theme
+resolution (`io.IsStdoutTTY()`). Despite the field name, this capability is
+not the same as prompt interactivity. Prompt availability is determined
+separately by the command/context I/O state.
+
+`Theme.pickVariant` uses `Interactive` to prefer a `notty` variant when
+primary output is not a TTY. `Profile` is not part of that variant-selection
+algorithm; color depth is adapted separately.
+
+`ReducedMotion` is detected from environment signals and exposed to theme
+resolution. Spinner and Status do not currently consume it to disable
+animation.
 
 Detection happens in the `nabat` root package using the same
 `colorprofile` and `xterm` libraries the IOStreams bundle relies on,

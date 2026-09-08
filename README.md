@@ -127,7 +127,7 @@ The module is `nabat.dev`. The core package and optional features live in subpac
 ```go
 import (
     "nabat.dev/nabat"      // core: app, commands, args, output, IOStreams, themes, help, version, completion
-    "nabat.dev/theme"      // theme constants and recipes
+    "nabat.dev/theme"      // theme constants and resolvers
     "nabat.dev/manpage"    // man page generation (extension)
     "nabat.dev/logging"    // themed slog logger (extension)
     "nabat.dev/nabat/nabattest"  // test helpers: NewIO, NewTTYIO, Run, Capture, Context

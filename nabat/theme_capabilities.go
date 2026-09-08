@@ -161,9 +161,11 @@ func detectUnicodeFromEnv() theme.UnicodeLevel {
 	return theme.UnicodeWide
 }
 
-// detectReducedMotionFromEnv reports whether animations should be
-// suppressed. Checks NABAT_REDUCED_MOTION, REDUCE_MOTION, and NO_MOTION;
-// truthy values enable it, while "0" / "false" / "no" / "off" keep it off.
+// detectReducedMotionFromEnv reports a detected reduced-motion preference
+// from NABAT_REDUCED_MOTION, REDUCE_MOTION, and NO_MOTION. Truthy values
+// enable it; "0" / "false" / "no" / "off" keep it off. The result is stored
+// on [theme.Capabilities.ReducedMotion]. Spinner and Status do not currently
+// consume it to disable animation.
 func detectReducedMotionFromEnv() bool {
 	for _, key := range []string{"NABAT_REDUCED_MOTION", "REDUCE_MOTION", "NO_MOTION"} {
 		v := strings.TrimSpace(os.Getenv(key))

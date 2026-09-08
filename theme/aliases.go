@@ -26,7 +26,7 @@ import (
 //
 // [Palette.Aliases] overrides entries here; an empty target disables the
 // default for that key. Cycles stop at Style time (zero style) and are
-// reported at [Theme.Resolve].
+// reported by [Theme.ResolveErr]. [Theme.Resolve] discards that error.
 var DefaultAliases = map[Token]Token{
 	ListEnumerator: TextMuted,
 	TreeEnumerator: ListEnumerator,
@@ -42,8 +42,9 @@ var DefaultAliases = map[Token]Token{
 }
 
 // validateAliasChain reports a cycle in the alias chain starting at
-// start. Called from [Theme.Resolve] so authoring mistakes surface at
-// load rather than on first [ResolvedTheme.Style] call.
+// start. Called during resolve so authoring mistakes surface at load
+// rather than on first [ResolvedTheme.Style] call. [Theme.ResolveErr]
+// returns the cycle error; [Theme.Resolve] discards it.
 func validateAliasChain(start Token, aliases map[Token]Token) error {
 	if aliases == nil {
 		return nil

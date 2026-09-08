@@ -25,9 +25,9 @@ core's public extension API.
 
 | Package                     | Role                                                                                |
 |-----------------------------|-------------------------------------------------------------------------------------|
-| `nabat.dev`                 | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Recipe` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
+| `nabat.dev`                 | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Resolver` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
 | `nabat.dev/nabat/nabattest` | Test helpers nested under core (analogous to `net/http/httptest`): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`. Not imported by production code. |
-| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Recipe`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded DTCG JSON manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, ...), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
+| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Resolver`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded Nabat theme manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, ...), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
 | `nabat.dev/manpage`         | `man` subcommand (roff/man-page generation)                                         |
 | `nabat.dev/logging`         | Styled `*slog.Logger` install with --verbose / --log-level flag wiring; derives its level / key=value styles from `theme.ResolvedTheme` via `logging.FromTheme`. |
 
@@ -54,7 +54,8 @@ Consequences:
 Theme, help, version, and completion stay in core on purpose. Theme is on
 every output path through `App.Theme()`; the catalog and parser live in
 `nabat.dev/theme` (parser under `theme/internal/manifest`). `App.New` resolves
-the recipe against detected `Capabilities` and pins it for the App lifetime.
+the installed theme against detected `Capabilities` and pins it for the App
+lifetime.
 Help and version need root flags (`--help`, `--version`), which extensions
 cannot add. Completion stays in core because Cobra's completion code is already
 linked, the completer hooks hang off flags and args the core owns, and shell
@@ -155,11 +156,11 @@ Extensions install subcommands (via `App.Command`), register global hooks (via
 | `fieldConfig`  | Private field config shared by positional args and flags. Holds default, short, env-prefixed names (`envPrefixed`), env literal aliases (`envLiteral`), usage, required, and persistent (inherited) marker. |
 | `argSpec` / `flagSpec` | Private build-time specs each option mutates. `argSpec` wraps `fieldConfig` plus `promptConfig`; `flagSpec` wraps only `fieldConfig`. Plain `func(*spec)` options edit them directly. |
 | `ValueType`    | Type descriptor for args and flags. Identifies the kind (string, bool, int, float, select, etc.) and optional choice constraints. Each kind exposes a `valueAdapter` so flag registration / parsing is generic. |
-| `theme.Theme`  | Declarative theme data: `Name`, `Default Variant`, `Variants map[Variant]Palette`, plus cross-variant defaults. Constructed inline (struct literal) or via `nabat.WithTheme(name)` (resolved through the catalog). `Theme.Resolve(Capabilities)` produces a `ResolvedTheme`. Implements `theme.Recipe`. |
-| `theme.Recipe` | `interface { Resolve(Capabilities) ResolvedTheme }`. Escape hatch for themes whose palette choice depends on runtime capabilities in a way one Palette per Variant cannot express. `theme.Theme` satisfies it; bespoke recipes implement it directly. |
+| `theme.Theme`  | Declarative theme data: `Name`, `Default Variant`, `Variants map[Variant]Palette`, plus cross-variant defaults. Constructed inline (struct literal) or via `nabat.WithTheme(name)` (resolved through the catalog). `Theme.Resolve(Capabilities)` produces a `ResolvedTheme` and discards resolution errors; `Theme.ResolveErr` returns those errors. Implements `theme.Resolver`. |
+| `theme.Resolver` | `interface { Resolve(Capabilities) ResolvedTheme }`. Escape hatch for themes whose palette choice depends on runtime capabilities in a way one Palette per Variant cannot express. `theme.Theme` satisfies it; bespoke resolvers implement it directly. `App.finalize` calls `ResolveErr` for a concrete `theme.Theme` and `Resolve` for other resolvers. |
 | `theme.Palette` | Per-variant style data: `Tokens`, `Aliases`, `Chroma`/`ChromaName`, `Glamour`/`GlamourName`/`GlamourFor`, `Prompt`, `Huh`. Each cascade slot (chroma, glamour, prompt) collapses at `Theme.Resolve` time. |
 | `theme.ResolvedTheme` | Immutable, capability-aware result of `Theme.Resolve`. Consumers query it through `Style(token)` (with alias-chain fall-through), plus single-value accessors for `Chroma`, `Glamour`, `Huh`, `ListEnumerator`, `TableBorder`. Returned by `App.Theme()`. Thread-safe; never mutated after `App.New` returns. |
-| `theme.Capabilities`  | Snapshot of terminal facts the framework detects once at `App.finalize` time: `Dark`, `BackgroundHex`, `Profile`, `Interactive`, `Width`, `Hyperlinks`, `Unicode`, `ReducedMotion`. Recipes branch on these to pick palettes that work on the terminal at hand. |
+| `theme.Capabilities`  | Snapshot of terminal facts the framework detects once at `App.finalize` time: `Dark`, `BackgroundHex`, `Profile`, `Interactive`, `Width`, `Hyperlinks`, `Unicode`, `ReducedMotion`. Resolvers branch on these to pick palettes that work on the terminal at hand. `Interactive` is primary-output TTY state (`IsStdoutTTY`), not prompt availability. |
 | `theme.Override`     | Per-Palette mutation produced by `theme.SetToken`/`SetAlias`/`SetChroma*`/`SetGlamour*`/`SetHuh`. Applied to every variant of the underlying theme via `Theme.With(...)` or `nabat.WithThemeOverride(...)` for one-line tweaks of a built-in theme. |
 | `theme.Requirement`  | Token set declared by a consumer (core or extension via `ExtensionWithRequirements`). The framework cross-checks against the resolved theme at `App.finalize` and surfaces missing tokens (warn-by-default; hard error via `nabat.WithStrictThemeRequirements`). |
 | `ConfigErrors` | Aggregated validation errors from config validation and declarative registration via `WithCommand`. Collects multiple issues into one error value, returned from `New`. |
@@ -199,7 +200,7 @@ surface.
 App
 ├── config (private, set via Option)
 │   ├── name, envPrefix
-│   ├── theme (theme.Recipe: the recipe set by WithTheme / WithCustomTheme; concrete is usually theme.Theme)
+│   ├── theme (theme.Resolver: the resolver set by WithTheme / WithCustomTheme; concrete is usually theme.Theme)
 │   ├── themeOverrides ([]theme.Override: registered via WithThemeOverride / WithThemeOverrides)
 │   ├── strictThemeRequirements (bool: promote requirement diagnostics to hard errors)
 │   ├── resolvedTheme (theme.ResolvedTheme: populated once by config.finalize)

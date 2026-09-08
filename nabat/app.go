@@ -38,10 +38,10 @@ type config struct {
 	name      string
 	envPrefix string
 
-	// theme is the recipe a [WithTheme] / [WithCustomTheme] option installed.
-	// It is resolved once per App at finalize time against the detected
-	// [theme.Capabilities]; the result lands in resolvedTheme. The recipe
-	// itself stays around so tests and tooling can re-resolve under
+	// theme is the [theme.Resolver] a [WithTheme] / [WithCustomTheme] option
+	// installed. It is resolved once per App at finalize time against the
+	// detected [theme.Capabilities]; the result lands in resolvedTheme. The
+	// resolver itself stays around so tests and tooling can re-resolve under
 	// different capabilities without re-applying every option.
 	//
 	// Stored as [theme.Resolver] (interface) so [theme.Theme] (the common
@@ -290,7 +290,7 @@ func WithCustomTheme(r theme.Resolver) Option {
 
 // WithThemeOverride applies a per-token style on top of the active theme.
 // Later calls for the same token win. Overrides apply to every variant of a
-// [theme.Theme]; they are ignored for opaque [theme.Recipe] resolvers.
+// [theme.Theme]; they are ignored for opaque [theme.Resolver] implementations.
 //
 // Example:
 //
@@ -678,7 +678,7 @@ func New(name string, opts ...Option) (*App, error) {
 		return nil, &configErrs
 	}
 
-	// Resolve the theme recipe against the IO bundle's capabilities.
+	// Resolve the theme against the IO bundle's capabilities.
 	// finalize MUST run after every option has been applied (so the right
 	// resolver is in cfg.theme and the right IO is in cfg.io) and BEFORE any
 	// command, extension, or pre-run hook can read Theme(). Storing the
