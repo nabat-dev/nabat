@@ -36,9 +36,10 @@ var (
 )
 
 // ProgressBar tracks a finite number of steps on stderr so progress does not
-// corrupt piped stdout. On a TTY the bar updates in place; otherwise each update
-// prints "[current/total]". Theme colors apply unless [WithoutProgressBarTheme]
-// is set. Safe for concurrent Increment/Add/Set/Done after construction.
+// corrupt piped stdout. On a stderr TTY the bar updates in place; otherwise each
+// update prints "[current/total]". Theme colors apply unless
+// [WithoutProgressBarTheme] is set. Safe for concurrent Increment/Add/Set/Done
+// after construction.
 type ProgressBar struct {
 	mu      sync.Mutex
 	model   progress.Model

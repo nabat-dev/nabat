@@ -327,13 +327,13 @@ func (s *Status) renderPlainTable(cfg *statusConfig) string {
 }
 
 // Status runs fn with a live multi-row status display on stderr.
-// On a TTY, fn runs while the UI animates; Status returns only after fn
-// returns. On cancel or ctrl+c it stops the UI, waits for fn, then returns
+// On a stderr TTY, fn runs while the UI animates; Status returns only after
+// fn returns. On cancel or ctrl+c it stops the UI, waits for fn, then returns
 // [context.Canceled] unless fn returned a non-nil error. Bad options yield
 // [*ConfigErrors].
 //
 // Use [WithTitle], [WithColumns], and [Status.Row] to shape the display.
-// Non-TTY output is a plain title plus a final table.
+// When stderr is not a TTY, output is a plain title plus a final table.
 //
 // Example:
 //

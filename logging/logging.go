@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"nabat.dev/nabat"
+	"nabat.dev/theme"
 )
 
 // Sentinel errors for [errors.Is] checks.
@@ -114,7 +115,23 @@ type extension struct {
 	cfg config
 }
 
+var _ nabat.ExtensionWithRequirements = (*extension)(nil)
+
 func (e *extension) String() string { return "logging" }
+
+// ThemeRequires reports the tokens the default themed handler reads from
+// the resolved theme. When [WithHandler] supplies a custom handler, that
+// path does not use Nabat theme styles, so this returns a zero
+// [theme.Requirement].
+func (e *extension) ThemeRequires() theme.Requirement {
+	if e.cfg.handler != nil {
+		return theme.Requirement{}
+	}
+	return theme.Require("logging extension",
+		theme.StatusInfo, theme.StatusWarning, theme.StatusError,
+		theme.AccentPrimary, theme.TextPrimary,
+	)
+}
 
 func (e *extension) Init(app nabat.AppSurface) error {
 	cfg := e.cfg

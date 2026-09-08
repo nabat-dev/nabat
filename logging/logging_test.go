@@ -16,6 +16,7 @@ package logging_test
 
 import (
 	"bytes"
+	"io"
 	"log/slog"
 	"testing"
 
@@ -25,6 +26,7 @@ import (
 	"nabat.dev/logging"
 	"nabat.dev/nabat"
 	"nabat.dev/nabat/nabattest"
+	"nabat.dev/theme"
 )
 
 func TestLoggingDefaultLevel(t *testing.T) {
@@ -187,4 +189,42 @@ func TestLoggingInvalidLevelFlagSurfacesError(t *testing.T) {
 	err := nabattest.Run(t, app, []string{"run", "--log-level", "nope"})
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "invalid log-level value")
+}
+
+func TestThemeRequires(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []logging.Option
+		want theme.Requirement
+	}{
+		{
+			name: "default themed handler",
+			want: theme.Require("logging extension",
+				theme.StatusInfo, theme.StatusWarning, theme.StatusError,
+				theme.AccentPrimary, theme.TextPrimary,
+			),
+		},
+		{
+			name: "custom handler",
+			opts: []logging.Option{
+				logging.WithHandler(slog.NewTextHandler(io.Discard, nil)),
+			},
+			want: theme.Requirement{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ext, err := logging.New(tt.opts...)
+			require.NoError(t, err)
+			reqExt, ok := ext.(nabat.ExtensionWithRequirements)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.want, reqExt.ThemeRequires())
+		})
+	}
 }

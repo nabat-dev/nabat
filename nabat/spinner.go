@@ -218,10 +218,11 @@ func (s *Spinner) completionIcon(fnErr error) string {
 // starts after a short delay (default 200ms; see [WithSpinnerDelay]); if fn
 // finishes sooner, a static success or error line is printed instead.
 //
-// On a TTY, fn runs in a goroutine while the caller drives animation; Spinner
-// returns only after fn returns. Cancel waits for fn, then returns
-// [context.Canceled] when fn returned nil. Non-TTY mode prints the title once
-// and runs fn without animation. Prefer [Context.Status] for multi-row displays.
+// On a stderr TTY, fn runs in a goroutine while the caller drives animation;
+// Spinner returns only after fn returns. Cancel waits for fn, then returns
+// [context.Canceled] when fn returned nil. When stderr is not a TTY, Spinner
+// prints the title once and runs fn without animation. Prefer [Context.Status]
+// for multi-row displays.
 //
 // Example:
 //

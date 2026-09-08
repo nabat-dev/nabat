@@ -28,14 +28,14 @@ they help.
 
 **What this means:**
 
-Same code: color on a TTY, plain text in a pipe, clean logs in CI. No extra flag to
-"fix" output for the environment.
+Same code adapts to TTY state, prompt interactivity, and color policy on their
+own. No extra flag to "fix" output for the environment.
 
 **In practice:**
 
-- `Success`, `Warn`, `Error`, and `Info` pick the stream and the theme for you.
-- Prompts run only when stdin is a real terminal. In CI you get env, defaults, or a
-  clear error.
+- `Success`, `Warn`, `Error`, and `Info` write to stderr and use the theme.
+- Prompts run only when stdin and stdout are both terminals. In CI you get env,
+  defaults, or a clear error.
 - Themes start conservative. Richer palettes are opt-in.
 
 **Example:**

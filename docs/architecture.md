@@ -75,12 +75,11 @@ it.
 │  (help, version, and completion are built into core)      │
 ├──────────────────────────────────────────────────────────┤
 │                   Output & Interaction                    │
-│  Semantic (Success, Warn, Error, Info, Print)             │
-│  Structured (Table, List, Tree, JSON, YAML, TOML,        │
-│    Encode, Highlight)                                     │
-│  Progress (ProgressBar)                                   │
-│  Live status (Spinner, Status)                            │
-│  Interactive prompts (Confirm, Form)                      │
+│  Semantic status (Success, Warn, Error, Info)             │
+│  Command product (Print, Table, List, Tree, JSON, YAML,   │
+│    TOML, Encode, Highlight, Markdown)                     │
+│  Live status (Spinner, Status, ProgressBar)               │
+│  Interactive prompts (Confirm, Form, Input)               │
 │  Custom help rendering (markdown via Glamour)             │
 ├──────────────────────────────────────────────────────────┤
 │                Config, Command & Resolution               │
@@ -150,7 +149,7 @@ Extensions install subcommands (via `App.Command`), register global hooks (via
 | `App`          | Root CLI application. Holds the Cobra root command, the `*commandSpec` map, and config. Entry point for `Command`, `MustCommand`, `Run`. |
 | `Extension`    | `interface { fmt.Stringer; Init(AppSurface) error }`: the single extension point. Extensions are installed via the `WithExtension(ext)` Option passed to `New(...)` and run in declaration order inside `New`. `String()` identifies the extension in error messages. |
 | `Command`      | One subcommand. Wraps a Cobra command with Nabat metadata (positional args, flags, run function). Supports nesting via `Command()` (returns `(*Command, error)`) or `MustCommand()` (panics on failure). |
-| `Context`      | Per-invocation runtime passed to `RunFunc`. Holds Go context, resolved values, raw args, interactive state, the shared sticky-error writer, and every output/prompt method. `Logger()` reads from the App's installed logger or returns a discard logger. |
+| `Context`      | Per-invocation runtime passed to `RunFunc`. Holds Go context, resolved values, raw args, interactive state, and every output/prompt method. Output goes through `IOStreams.Out` (stdout) and `IOStreams.ErrOut` (stderr), each with independent sticky-error state. `Logger()` reads from the App's installed logger or returns a discard logger. |
 | `config`       | Private app config. Holds name, env prefix, theme, IO writers, the optional installed logger, the root command's `commandSpec` (`rootSpec`), pending declarative subcommand registrations (`pendingCommands`), and the optional error handler. Validated at construction. |
 | `commandSpec`  | Private command spec. Single struct combining description, long description, example, aliases, group, hidden/deprecated markers, run function, flags, args, hooks, passthrough definition, parent pointer, parse and arity options, completion config, and pending child registrations from nested `WithCommand` calls. |
 | `fieldConfig`  | Private field config shared by positional args and flags. Holds default, short, env-prefixed names (`envPrefixed`), env literal aliases (`envLiteral`), usage, required, and persistent (inherited) marker. |
@@ -165,7 +164,7 @@ Extensions install subcommands (via `App.Command`), register global hooks (via
 | `theme.Requirement`  | Token set declared by a consumer (core or extension via `ExtensionWithRequirements`). The framework cross-checks against the resolved theme at `App.finalize` and surfaces missing tokens (warn-by-default; hard error via `nabat.WithStrictThemeRequirements`). |
 | `ConfigErrors` | Aggregated validation errors from config validation and declarative registration via `WithCommand`. Collects multiple issues into one error value, returned from `New`. |
 
-**Bundled theme manifests (`theme/data/*.json`).** Brand colors for the built-in `nabat` theme track the canonical palette package (`palette/palette/nabat-dark.json` and `nabat-light.json`): each manifest primitive hex matches the palette `colors` entry with the same name. The manifest-only **`link` primitive** resolves through palette **`roles.link`** (same hex as the named garden swatch). **`text.link`** always references that dedicated primitive, not `status.info`, so hyperlink color is explicit in diffs. Every colored variant shares the same **`tokens` key set** as `theme/data/default.json` for its variant kind (`dark`, `light`, or `notty`); `TestBundledManifestTokenKeysMatchDefault` in `theme/manifest_token_keys_test.go` enforces key parity. Cross-repo verification runs when **`NABAT_PALETTE_ROOT`** points at a palette repository root (`TestNabatManifestHexMatchesPalette` in `theme/nabat_palette_parity_test.go`).
+**Bundled theme manifests (`theme/data/*.json`).** Every colored variant shares the same **`tokens` key set** as `theme/data/default.json` for its variant kind (`dark`, `light`, or `notty`). `TestBundledManifestTokenKeysMatchDefault` in `theme/manifest_token_keys_test.go` enforces that vocabulary. Brand colors for the built-in `nabat` theme are intended to track `nabat-dev/palette`; this repository does not currently verify hex parity against a Palette checkout.
 
 All five option families (`Option`, `RootOption`, `CommandOption`,
 `ArgOption`, and `FlagOption`) are Go interfaces, so one value can satisfy
@@ -242,14 +241,14 @@ Context (created per invocation)
 ├── passthroughArgs ([]string: args after "--"; nil when "--" absent)
 ├── values (map[string]any: resolved args + flags)
 ├── set (map[string]bool: true when value came from arg/env/prompt, not a default)
-└── interactive (bool: IO.CanPrompt() at construction time)
+└── interactive (bool: IO.IsInteractive() at construction time: stdin and stdout are both TTYs)
 
 IOStreams
 ├── In (io.Reader: raw input)
 ├── Out (io.Writer: colorprofile-wrapped stdout, preserves Fd())
 ├── ErrOut (io.Writer: colorprofile-wrapped stderr, preserves Fd())
 ├── Methods: IsStdinTTY/IsStdoutTTY/IsStderrTTY, SetXxxTTY (overrides for tests),
-│            ColorEnabled, CanPrompt, TerminalWidth, Err (sticky), RawIn/RawOut/RawErrOut
+│            IsInteractive, TerminalWidth, TerminalHeight, Err (joins Out and ErrOut sticky errors), RawIn/RawOut/RawErrOut
 └── Constructors: NewSystemIO() (os.Stdin/Stdout/Stderr), NewIO(in,out,err); nabattest.NewIO() returning bundle + 3 buffers
 ```
 
@@ -269,10 +268,9 @@ App.Run(ctx)
 └── 3. Nabat's RunE pipeline (per matched command)
         │
         ├── a. Build Context (newContext)
-        │       Detect interactivity (TTY check on stdin + stdout)
+        │       Detect interactivity (stdin and stdout both TTY)
         │       Resolve positional args (see Arg Resolution Flow below)
         │       Resolve flags including persistent flags from ancestors
-        │       Create sticky-error writer for output
         │
         ├── b. Global preRun hooks (App.OnPreRun)
         │       Run each func(*Context) error in registration order
@@ -367,23 +365,48 @@ cancellation, timeouts, and value propagation.
 
 ## Output System
 
-`Context` has three output paths. They share one sticky-error, color-aware
-writer per invocation:
+`Context` uses separate stdout and stderr paths. `IOStreams.Out` and
+`IOStreams.ErrOut` are independent `termio.Writer` values, each with its own
+sticky-error state. A write error on stdout does not poison stderr, and a write
+error on stderr does not poison stdout. `IOStreams.Err()` joins whatever errors
+the two streams have latched.
 
-- **Semantic output**: styled symbols and a message (`Success`, `Warn`,
-  `Error`, `Info`, print helpers), with optional key-value pairs.
-- **Structured output**: tables, lists, trees, JSON / YAML / TOML, encoding,
-  highlighting, progress bars.
-- **Diagnostic logging**: `Context.Logger()` returns a `*slog.Logger`. Install
-  one with `nabat.WithLogger` or `nabat.WithExtension(logging.New(...))`
-  (themed logger, optional `--verbose` / `--log-level`). Otherwise you get a
-  discard logger.
+Nabat's internal `writer` wrapper is constructed per call around one of those
+streams. It is not a single per-Context writer.
+
+Command product (stdout):
+
+- `Print` / `Println` / `Printf`
+- `Table` / `List` / `Tree`
+- `JSON` / `YAML` / `TOML`
+- `Encode` / `Highlight` / `Markdown`
+
+Human status and progress (stderr):
+
+- `Success` / `Warn` / `Error` / `Info`
+- `Spinner` / `Status` / `ProgressBar`
+
+Diagnostic logging: `Context.Logger()` returns the installed `*slog.Logger`.
+Install one with `nabat.WithLogger` or `nabat.WithExtension(logging.New(...))`.
+The first-party logging extension's default handler writes to
+`IOStreams.ErrOut`. Otherwise you get a discard logger.
 
 ### Terminal awareness
 
-TTY gets color. Pipes get the `NoTTY` profile (escape codes stripped). Semantic
-output, structured output, and progress bars share the writer, so the first I/O
-error sticks for the whole `Context`.
+TTY state and color policy are separate dimensions.
+
+TTY state (stdin, stdout, and stderr, tracked independently) controls
+terminal-specific behavior such as live rewriting and animation. Prompting
+requires `IOStreams.IsInteractive()` (stdin and stdout both TTY), which is
+more than "a stream is a TTY". Spinner, Status, and ProgressBar key off
+stderr TTY, not prompt interactivity.
+
+Color is governed by detected color capability and user color policy
+(`NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`). `NewSystemIO` /
+`NewIO` currently detect that policy from stdout and pass the same policy
+object to both `Out` and `ErrOut`. Stream TTY flags stay independent of
+that shared policy. A TTY may have color suppressed. Forced color may
+remain on non-TTY output. These signals are not equivalent.
 
 ## Command Tree
 

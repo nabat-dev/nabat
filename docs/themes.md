@@ -616,6 +616,11 @@ func (e *Extension) ThemeRequires() theme.Requirement {
 }
 ```
 
+The first-party `logging` package implements this for its default themed
+handler. `logging.WithHandler` installs a custom `slog.Handler` that does
+not read the resolved theme, so that configuration returns an empty
+requirement (no tokens).
+
 The framework's own consumers are declared in `theme.CoreRequirements()`;
 adding a new core consumer (a new `Status*`, `Text*`, `Table*`,
 `Spinner*`, etc.) means adding to the right `Requirement` there so the

@@ -553,7 +553,7 @@ tree.enumerator
 
 These component-specific tokens allow a theme to override structured output independently when required.
 
-### 8.6 Interactive Progress
+### 8.6 Live Status and Progress
 
 ```text
 spinner.active
@@ -1702,7 +1702,7 @@ The complete Nabat design architecture can be viewed as:
              ┌────────────┴────────────┐
              │                         │
            stdout                    stderr
-       command product          human interaction
+       command product        status / diagnostics / interaction
 ```
 
 The essential rule is:
@@ -1719,7 +1719,7 @@ When making a design decision for Nabat, prefer the choice that preserves these 
 2. **Shared semantics across dark and light variants.**
 3. **Standard CLI meanings over invented conventions.**
 4. **Clean machine-readable stdout.**
-5. **Human status and interaction on stderr.**
+5. **Human status, diagnostics, and interaction on stderr.**
 6. **Useful plain-text behavior before styled behavior.**
 7. **Semantic tokens instead of direct color coupling.**
 8. **Meaning that survives without color.**
