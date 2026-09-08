@@ -22,16 +22,15 @@ package theme
 //
 //	nabat.New("myctl", nabat.WithTheme(theme.Dracula))
 const (
-	// Default is the capability-aware built-in theme installed when the
-	// caller does not pass nabat.WithTheme. It has dark, light, and notty
-	// variants. Variant selection follows primary-output TTY state and
-	// detected background luminance; output color depth is adapted
-	// separately.
+	// Default is the theme installed when the caller does not pass
+	// nabat.WithTheme. Capability-aware: defers to the terminal's
+	// detected color profile and background luminance.
 	Default = "default"
 
-	// Minimal is a low-color, single-notty-variant theme. Status and
-	// accent roles primarily rely on bold styling, while text, link,
-	// and code roles use neutral foreground and background primitives.
+	// Minimal is a low-color theme that relies on bold instead of
+	// foreground colors. It declares variant=notty so the framework
+	// disables chroma syntax highlighting and forces glamour into
+	// plain-text mode, matching pipe-friendly defaults.
 	Minimal = "minimal"
 
 	// Charm is the higher-contrast palette aligned with Charm.land
@@ -66,9 +65,9 @@ const (
 	CatppuccinMocha = "catppuccin-mocha"
 
 	// Nabat is the brand palette: warm Persian rock-candy tones
-	// (saffron, pistachio, pomegranate, turquoise). Chroma, glamour,
-	// and prompt color are derived from semantic tokens; promptKnobs
-	// set prefixes and border.
+	// (saffron, pistachio, pomegranate, turquoise). It ships with a
+	// matching framework-owned chroma style and huh adapter, both
+	// referenced by name from the manifest.
 	Nabat = "nabat"
 
 	// Nord is the Nord palette (Polar Night, Snow Storm, Frost,

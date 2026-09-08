@@ -23,7 +23,7 @@ styles attach.
 
 ## System Overview
 
-Theming lives in one package. That package does not import `nabat.dev/nabat`:
+Theming lives in one package. That package does not import `nabat.dev`:
 
 ```text
 nabat ──► nabat/theme  (leaf + catalog)
@@ -32,8 +32,8 @@ nabat ──► nabat/theme  (leaf + catalog)
 
 | Package        | Role                                                                                                       |
 |----------------|------------------------------------------------------------------------------------------------------------|
-| `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Resolver` interface; embedded JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev/nabat`. |
-| `nabat.dev/nabat` | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Resolver)` accepts any `Resolver` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities` and pins a `theme.ResolvedTheme` for the lifetime of the app. For a concrete `theme.Theme`, finalize uses `Theme.ResolveErr`; other resolvers have only `Resolve`. `App.Theme()` returns the pinned result. |
+| `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Recipe` interface; embedded DTCG JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
+| `nabat.dev`    | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Recipe)` accepts any `Recipe` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities`, calls `Theme.Resolve(caps)`, and pins the resulting `theme.ResolvedTheme` for the lifetime of the app. `App.Theme()` returns it. |
 
 `theme.Theme` is data, not a function. It holds one `Palette` per variant, a
 default variant when capabilities do not pin one, and a few cross-variant
@@ -50,7 +50,7 @@ Pass the theme name to `nabat.WithTheme`:
 
 ```go
 import (
-    "nabat.dev/nabat"
+    "nabat.dev"
     "nabat.dev/theme"
 )
 
@@ -73,20 +73,14 @@ registered name.
 
 The catalog shipped with Nabat:
 
-| Constant                    | Manifest                         | Best for                                                                                          |
-|-----------------------------|----------------------------------|---------------------------------------------------------------------------------------------------|
-| `theme.Default`             | `data/default.json`              | Capability-aware default with dark, light, and notty variants. Variant selection follows primary-output TTY state and detected background luminance; output color depth is adapted separately. |
-| `theme.Minimal`             | `data/minimal.json`              | Low-color, single `notty` variant. Status and accent roles primarily rely on bold styling, while text, link, and code roles use neutral foreground and background primitives. |
-| `theme.Charm`               | `data/charm.json`                | Higher-contrast Charm.land palette for dark terminals.                                            |
-| `theme.Dracula`             | `data/dracula.json`              | Dracula Classic (dark) and Alucard Classic (light).                                               |
-| `theme.Gruvbox`             | `data/gruvbox.json`              | morhetz/gruvbox dark and light.                                                                   |
-| `theme.CatppuccinLatte`     | `data/catppuccin-latte.json`     | Catppuccin Latte for light backgrounds.                                                           |
-| `theme.CatppuccinFrappe`    | `data/catppuccin-frappe.json`    | Catppuccin Frappé for dark backgrounds.                                                           |
-| `theme.CatppuccinMacchiato` | `data/catppuccin-macchiato.json` | Catppuccin Macchiato for dark backgrounds.                                                        |
-| `theme.CatppuccinMocha`     | `data/catppuccin-mocha.json`     | Catppuccin Mocha for dark backgrounds.                                                            |
-| `theme.Nabat`               | `data/nabat.json`                | Brand palette. Token-derived chroma, glamour, and prompt color; `promptKnobs` for prefixes/border. |
-| `theme.Nord`                | `data/nord.json`                 | Nord for dark backgrounds.                                                                        |
-| `theme.Solarized`           | `data/solarized.json`            | Solarized dark and light.                                                                         |
+| Constant                  | Manifest                       | Best for                                                                                                                   |
+|---------------------------|--------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| `theme.Default`           | `data/default.json`            | Capability-aware default; defers to the terminal's detected color profile and background luminance.                        |
+| `theme.Minimal`           | `data/minimal.json`            | Bold-only, no foreground colors. `notty` variant disables chroma and forces glamour into plain-text mode.                  |
+| `theme.Charm`             | `data/charm.json`              | Higher-contrast Charm.land palette for dark terminals.                                                                     |
+| `theme.Dracula`           | `data/dracula.json`            | Dracula palette for dark backgrounds; pairs with the upstream chroma `dracula` style and glamour `dracula` preset.         |
+| `theme.CatppuccinMocha`   | `data/catppuccin-mocha.json`   | Catppuccin Mocha for dark backgrounds; pairs with chroma's `catppuccin-mocha`.                                             |
+| `theme.Nabat`             | `data/nabat.json`              | Brand palette: warm Persian rock-candy tones with a framework-shipped chroma style and prompt block.                       |
 
 ## Programmatic Themes
 
@@ -98,7 +92,7 @@ build a `theme.Theme` struct and install it with `nabat.WithCustomTheme`:
 import (
     "charm.land/lipgloss/v2"
 
-    "nabat.dev/nabat"
+    "nabat.dev"
     "nabat.dev/theme"
 )
 
@@ -108,9 +102,9 @@ acme := theme.Theme{
     Variants: map[theme.Variant]theme.Palette{
         theme.VariantDark: {
             Tokens: map[theme.Token]lipgloss.Style{
-                theme.StatusError:   lipgloss.NewStyle().Foreground(lipgloss.Color("#E05454")).Bold(true),
-                theme.TextPrimary:   lipgloss.NewStyle().Foreground(lipgloss.Color("#EDE4D3")),
-                theme.TextSecondary: lipgloss.NewStyle().Foreground(lipgloss.Color("#D5CDC2")),
+                theme.StatusError: lipgloss.NewStyle().Foreground(lipgloss.Color("#E05454")).Bold(true),
+                theme.TextLabel:   lipgloss.NewStyle().Foreground(lipgloss.Color("#C89B3C")).Bold(true),
+                theme.TextValue:   lipgloss.NewStyle().Foreground(lipgloss.Color("#EDE4D3")),
             },
             Chroma:  acmeChroma,        // owned *chroma.Style
             Glamour: acmeGlamourCfg,    // owned *ansi.StyleConfig
@@ -130,12 +124,12 @@ Notes:
   wins. There is no mutual-exclusion check.
 - For palette choices that depend on runtime `Capabilities` in a way a
   per-variant `Palette` cannot express, implement the
-  `theme.Resolver` interface directly:
+  `theme.Recipe` interface directly:
 
   ```go
-  type myResolver struct{}
-  func (myResolver) Resolve(c theme.Capabilities) theme.ResolvedTheme {
-      // pick a Palette / Theme based on c.Dark, c.Interactive, ...
+  type myRecipe struct{}
+  func (myRecipe) Resolve(c theme.Capabilities) theme.ResolvedTheme {
+      // pick a Palette / Theme based on c.Profile, c.BackgroundHex, ...
       // and return its Resolve(c) result.
   }
   ```
@@ -164,7 +158,7 @@ app, _ := nabat.New("myctl",
     nabat.WithTheme(theme.Dracula),
     nabat.WithThemeOverrides(
         theme.SetToken(theme.StatusError, magenta),
-        theme.SetAlias(theme.ListItem, theme.TextSecondary),
+        theme.SetAlias(theme.ListItem, theme.TextBody),
         theme.SetChromaName("monokai"),
     ),
 )
@@ -177,35 +171,25 @@ capabilities pick.
 
 > [!WARNING]
 > Overrides are silently ignored when the active theme is a bespoke
-> `theme.Resolver` (anything other than a `theme.Theme` value). The resolver's
+> `theme.Recipe` (anything other than a `theme.Theme` value). The recipe's
 > `Resolve` method is opaque, so the framework cannot apply per-`Palette`
 > overrides into it.
 
 ## Manifest Format
 
 A theme manifest is a JSON document describing one Nabat theme.
-The format is defined by [`theme/schema/v1.json`](../theme/schema/v1.json).
-
-Nabat's theme architecture is inspired by design-token concepts such as
-primitives, semantic roles, references, and aliases. The JSON manifest
-format itself is Nabat-specific. It is not the
-[DTCG Design Tokens Format](https://www.w3.org/community/reports/design-tokens/CG-FINAL-format-20251028/).
-Nabat uses `$primitive` and `$token`, not DTCG `$value` / `$type`.
-
-Each manifest is organized per **variant**:
+Manifests follow the
+[Design Tokens Community Group (DTCG)](https://design-tokens.github.io/community-group/format/)
+three-tier model, organized per **variant**:
 
 1. **Variants**: top-level map keyed by mode (`dark` / `light` /
    `notty`). Each entry is a self-contained palette.
 2. **Primitives**: per-variant named raw colors (hex literals).
 3. **Tokens**: per-variant named semantic styles that reference
    primitives or other tokens.
-4. **Named integrations** (optional): per-variant `chroma`, `glamour`,
-   and `huh` strings.
-5. **`promptKnobs`** (optional, top-level): prefixes and border for the
-   Nabat-native prompt path.
-
-The schema accepts these top-level fields: `$schema`, `name`,
-`description`, `default`, `promptKnobs`, `variants`.
+4. **Component-level styles**: per-variant optional fields that
+   point at the chroma, glamour, and prompt integrations either by
+   upstream name or inline definition.
 
 Minimal example (single-variant):
 
@@ -238,16 +222,10 @@ Multi-variant example:
   "name": "myapp",
   "default": "dark",
   "variants": {
-    "dark": {
-      "primitives": { "fg": "#FFFFFF", "bg": "#000000" },
-      "tokens": { "text.primary": { "$primitive": "fg" } },
-      "huh": "charm"
-    },
-    "light": {
-      "primitives": { "fg": "#000000", "bg": "#FFFFFF" },
-      "tokens": { "text.primary": { "$primitive": "fg" } }
-    }
-  }
+    "dark":  { "primitives": { "fg": "#FFFFFF", "bg": "#000000" }, "tokens": { ... } },
+    "light": { "primitives": { "fg": "#000000", "bg": "#FFFFFF" }, "tokens": { ... } }
+  },
+  "prompt": "charm"
 }
 ```
 
@@ -255,15 +233,13 @@ The `$schema` field points at the public JSON Schema URL so editors
 that support JSON Schema (VSCode, JetBrains, Zed, Neovim with
 `coc-json`) get live validation, autocomplete, and hover documentation.
 
-### Top-level fields
+### Required Fields
 
-| Field          | Type   | Purpose                                                                                                                |
-|----------------|--------|------------------------------------------------------------------------------------------------------------------------|
-| `name`         | string | Identifier; matches `^[a-z0-9][a-z0-9-]*$`. Must equal the manifest's filename (without `.json`).                      |
-| `variants`     | object | Keyed by mode (`dark` / `light` / `notty`). Each entry has its own `primitives` + `tokens`.                            |
-| `default`      | enum   | `dark` / `light` / `notty`. Required when more than one variant is declared; optional for single-variant themes.       |
-| `description`  | string | Optional human-readable summary.                                                                                       |
-| `promptKnobs`  | object | Optional theme-wide prompt prefixes and border. See [Custom Style Authoring Paths](#custom-style-authoring-paths).     |
+| Field        | Type   | Purpose                                                                                                                |
+|--------------|--------|------------------------------------------------------------------------------------------------------------------------|
+| `name`       | string | Identifier; matches `^[a-z0-9][a-z0-9-]*$`. Must equal the manifest's filename (without `.json`).                      |
+| `variants`   | object | Keyed by mode (`dark` / `light` / `notty`). Each entry has its own `primitives` + `tokens`.                            |
+| `default`    | enum   | `dark` / `light` / `notty`. Required when more than one variant is declared; optional for single-variant themes.       |
 
 Per-variant required fields:
 
@@ -271,15 +247,6 @@ Per-variant required fields:
 |--------------|--------|------------------------------------------------------------------------------------------------------------------------|
 | `primitives` | object | Map of name to hex color (`^#[0-9A-Fa-f]{6}$`). Tokens reference these via `$primitive`.                               |
 | `tokens`     | object | Map of token name (for example `status.success`) to a style spec.                                                      |
-
-Per-variant optional fields:
-
-| Field     | Type   | Purpose                                                                                         |
-|-----------|--------|-------------------------------------------------------------------------------------------------|
-| `aliases` | object | Override or disable [default alias](#token-aliases) targets.                                    |
-| `chroma`  | string | Upstream chroma style name. Unknown names fail at parse time.                                   |
-| `glamour` | string | Upstream glamour preset name. Unknown names fail at parse time.                                 |
-| `huh`     | enum   | Upstream prompt adapter: `charm`, `base16`, `dracula`, or `catppuccin`.                         |
 
 ### Style Spec
 
@@ -291,9 +258,8 @@ A style spec is an object with at least one field:
 | `$token`          | string  | Reference to a key in this variant's `tokens` map. Inherits that token's resolved style; other fields layer on top.                |
 | `fg` / `bg`       | hex / colorRef | Explicit foreground / background colors.                                                                                    |
 | `borderForeground` / `borderBackground` | hex / colorRef | Border colors.                                                                                            |
-| `border`          | enum    | Lipgloss border preset (`hidden`, `normal`, `rounded`, `thick`, `double`, `block`, `outerHalfBlock`, `innerHalfBlock`). |
 | `bold`, `italic`, `underline`, `strikethrough`, `faint`, `blink`, `reverse` | bool | Lipgloss attribute toggles.                                                          |
-| `text`            | string  | Literal text stored on the lipgloss style.                                                                         |
+| `text`            | string  | Literal text content. Used by prompt prefix slots (e.g. `"check "`).                                                               |
 
 `$primitive` and `$token` are mutually exclusive within a single spec.
 Unknown attributes are rejected at parse time (the JSON Schema sets
@@ -309,26 +275,22 @@ the zero `lipgloss.Style` (terminal default).
 
 | Token              | Consumer                                                                                                      |
 |--------------------|---------------------------------------------------------------------------------------------------------------|
-| `status.success`   | Leading symbol on `Context.Success`.                                                                          |
-| `status.warning`   | Leading symbol on `Context.Warn`.                                                                             |
-| `status.error`     | Leading symbol on `Context.Error`, and the `error:` prefix on uncaught errors.                                |
-| `status.info`      | Leading symbol on `Context.Info`; spinner title; version line.                                                |
-| `status.active`    | Spinner icon on active `Context.Status` rows. *Default-aliased to `status.info`.*                             |
-| `text.primary`     | Primary body text; default for table/list/tree item text; status metadata values.                             |
-| `text.secondary`   | Descriptive text, help body, and other prose.                                                                 |
-| `text.title`       | Help titles, table headers, and other prominent section titles.                                               |
-| `text.link`        | Hyperlinks.                                                                                                   |
+| `status.success`   | `Context.Success` (the leading symbol and the success message text).                                          |
+| `status.warn`      | `Context.Warn`.                                                                                               |
+| `status.error`     | `Context.Error`, the `error:` prefix on uncaught errors.                                                      |
+| `status.info`      | `Context.Info`, version-line text, spinner styling.                                                           |
+| `text.label`       | Left side of `key=value` output, structured-output headers, help section titles.                              |
+| `text.value`       | Right side of `key=value`, table cell values.                                                                 |
+| `text.title`       | Help titles and other prominent section titles.                                                               |
+| `text.body`        | Help body copy and other multi-line prose.                                                                    |
 | `text.muted`       | De-emphasized chrome (overridable by `table.border`, `list.enumerator`, `tree.enumerator` for finer control). |
-| `accent.primary`   | Labels, key chrome, help section headings, status metadata keys.                                              |
-| `code.surface`     | Code-oriented surfaces.                                                                                       |
 | `table.border`     | Characters drawn between table cells. *Default-aliased to `text.muted`.*                                      |
 | `table.header`     | Cells in a table's header row. *Default-aliased to `text.title`.*                                             |
-| `table.cell`       | Cells in a table's data rows. *Default-aliased to `text.primary`.*                                            |
-| `list.item`        | List item text. *Default-aliased to `text.primary`.*                                                          |
+| `table.cell`       | Cells in a table's data rows. *Default-aliased to `text.value`.*                                              |
+| `list.item`        | List item text. *Default-aliased to `text.value`.*                                                            |
 | `list.enumerator`  | List enumerator markers. *Default-aliased to `text.muted`.*                                                   |
-| `tree.item`        | Tree item text. *Default-aliased to `text.primary`.*                                                          |
+| `tree.item`        | Tree item text. *Default-aliased to `text.value`.*                                                            |
 | `tree.enumerator`  | Tree enumerator markers. *Default-aliased via `list.enumerator` to `text.muted`.*                             |
-| `spinner.active`   | Live spinner icon. *Default-aliased to `status.info`.*                                                        |
 
 The full set of constants lives in
 [`theme/token.go`](../theme/token.go); add new ones there as the core
@@ -346,20 +308,18 @@ chain:
 list.enumerator -> text.muted
 tree.enumerator -> list.enumerator -> text.muted
 table.border    -> text.muted
-table.cell      -> text.primary
+table.cell      -> text.value
 table.header    -> text.title
-list.item       -> text.primary
-tree.item       -> text.primary
-spinner.active  -> status.info
-status.active   -> status.info
+list.item       -> text.value
+tree.item       -> text.value
 ```
 
 Any manifest can override a step with the per-variant `aliases` field:
 
 ```jsonc
 "aliases": {
-    "tree.item": "text.secondary",
-    "list.item": "text.secondary"
+    "tree.item": "text.body",
+    "list.item": "text.body"
 }
 ```
 
@@ -369,110 +329,182 @@ An empty value disables the framework default for that key:
 "aliases": { "table.border": "" }
 ```
 
-Cycles (alias chains that loop) are reported by `Theme.ResolveErr`.
-`Theme.Resolve` intentionally discards resolution errors; callers that
-need diagnostics should use `Theme.ResolveErr`.
-
-When a concrete `theme.Theme` is installed on a Nabat App, `App.finalize`
-uses `ResolveErr`, so the error fails app construction rather than
-reaching the first `Style` lookup.
+Cycles (alias chains that loop) surface as a hard error from
+`Theme.Resolve` so authoring mistakes never reach the lookup path.
 
 ## Optional Fields and Defaults
 
-A variant may name upstream chroma, glamour, and huh styles. Theme-wide
-prompt knobs live at the top level as `promptKnobs`.
+Manifests may set up to three integration points beyond raw tokens:
+chroma (syntax highlighting), glamour (markdown), and prompt
+(interactive prompts). Each comes in a **named** form (a string
+referencing an upstream library style or one of the four bundled
+prompt adapters) and an **inline** form (an object defining the style
+directly against the variant's primitives). The two forms are
+mutually exclusive on each integration; the JSON Schema and the
+manifest validator both enforce that.
 
-These JSON fields are names or small knobs. They are not inline style
-trees. Owned chroma, glamour, prompt, and huh values are a programmatic
-`Palette` concern (`nabat.WithCustomTheme`), not extra manifest objects.
+When neither form is present, the framework picks a default that
+matches the variant key and the resolved [Capabilities](#capabilities):
 
-When a named field is omitted, `Theme.Resolve` fills
-the slot:
+| Integration | When omitted, the framework substitutes...                                                                                                                                              |
+|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `chroma`    | `monokai` for `dark`, `github` for `light`, none for `notty`. `Context.Code` then falls back to chroma's own default if the name does not resolve.                                     |
+| `glamour`   | `notty` when the variant is `notty` or the primary stream is non-interactive; `dark` when `Capabilities.Dark` is true; `light` otherwise. `Context.Markdown` falls back to raw text on glamour init failure. |
+| `prompt`    | `theme.PromptFromTokens` derives a `huh.Theme` from the variant's resolved tokens, so prompts share the same palette as the rest of the output even if no adapter is named.           |
 
-| Field | Where | When omitted, Resolve uses |
-| --- | --- | --- |
-| `chroma` | per variant | `ChromaFromTokens` from the variant's tokens |
-| `glamour` | per variant | `GlamourFromTokens` on the preset from `GlamourPreset`: `notty` when the variant is `notty` or `Capabilities.Interactive` is false; otherwise `dark` or `light` from `Capabilities.Dark` |
-| `huh` | per variant | `PromptFromTokens`, then top-level `promptKnobs` if set |
-| `promptKnobs` | top-level | no extra prefixes or border; token-derived prompt colors still apply |
+`prompt` and `promptStyle` may also be declared at the **top level** of
+the manifest, outside the `variants` map; in that case every variant
+inherits the shared adapter / inline block unless it declares its own.
 
-`huh` is a closed catalog: `charm`, `base16`, `dracula`, `catppuccin`.
-Unknown `huh`, `chroma`, and `glamour` names fail at parse time.
-
-If a variant sets `huh`, that upstream wrapper wins. `promptKnobs` are
-not applied to it. `promptKnobs` apply only to the Nabat-native prompt
-path (`Palette.Prompt` or `PromptFromTokens`).
-
-`Context.Markdown` falls back to raw text if glamour init fails.
-
-That is how `theme.Default` covers dark, light, and notty without a
-separate file per environment.
+That is how `theme.Default` works across terminals without a separate
+manifest per environment.
 
 ## Custom Style Authoring Paths
 
-### 1. Name an upstream style in the manifest
+Two ways to ship custom chroma / glamour / prompt styling: name an upstream
+style, or define it inline against this variant's primitives.
 
-Use the named field when the look already exists upstream.
+### 1. Reference an Upstream Name
+
+Use the named field when the look already exists upstream (for example
+"use Catppuccin as-is").
 
 ```jsonc
 // theme/data/dracula.json (excerpt)
 {
+  "prompt": "dracula",
   "variants": {
     "dark": {
       "chroma":  "dracula",
-      "glamour": "dracula",
-      "huh":     "dracula"
+      "glamour": "dracula"
     }
   }
 }
 ```
 
-The `huh` adapters live in
-[`theme/internal/manifest/huh_adapters.go`](../theme/internal/manifest/huh_adapters.go).
-Anything else is rejected at parse time with the four valid names in the
-error.
+The framework wires upstream chroma / glamour through their own
+catalogs. The `prompt` field is a **closed catalog** of four bundled
+upstream wrappers (`charm`, `base16`, `dracula`, `catppuccin`), defined
+in [`theme/internal/manifest/huh_adapters.go`](../theme/internal/manifest/huh_adapters.go).
+Anything not in that list is rejected at registry init with the four
+valid names listed in the error.
 
-### 2. Set `promptKnobs` on the token-derived prompt path
+Unknown chroma / glamour names do not fail the build. Those libraries fall
+back to their own defaults, so a theme aimed at a future upstream style
+looks plain until that release ships.
 
-The Nabat brand theme does this. It does not set `chroma`, `glamour`, or
-`huh`; those integrations are derived from tokens. Prefixes and border
-come from `promptKnobs`:
+### 2. Define the Style Inline
+
+For everything else, embed the definition in the manifest. The three
+inline forms (`chromaStyle`, `glamourStyle`, `promptStyle`) speak
+the same style-spec dialect as the `tokens` map and may reference
+primitives and tokens with `$primitive` / `$token`. They are
+mutually exclusive with their named counterparts.
+
+The brand-aligned `nabat` theme uses the inline path for *both* its
+chroma palette and its prompt block, so the manifest is the only
+place where its styling lives (there is no accompanying Go file):
 
 ```jsonc
 {
-  "promptKnobs": {
-    "selectedPrefix": "✓ ",
-    "unselectedPrefix": "• ",
-    "border": "rounded"
+  "chromaStyle": {
+    "background":      { "bg": { "$primitive": "darkBg" } },
+    "name_function":   { "$primitive": "turquoise" },
+    "comment":         { "$primitive": "threadGray", "italic": true },
+    "keyword":         { "$primitive": "saffronGold", "bold": true }
+  },
+  "promptStyle": {
+    "title":            { "$token": "text.title" },
+    "selectedPrefix":   { "$primitive": "pistachio",  "text": "✓ " },
+    "unselectedPrefix": { "$primitive": "threadGray", "text": "• " },
+    "buttonFocused":    {
+      "fg":   { "$primitive": "warmCream" },
+      "bg":   { "$primitive": "crystalGold" },
+      "bold": true
+    },
+    "border":           "rounded"
   }
 }
 ```
 
-| Field | Purpose |
-| --- | --- |
-| `selectedPrefix` | Literal marker before selected options. |
-| `unselectedPrefix` | Literal marker before unselected options. |
-| `border` | Form/card border preset (`hidden`, `normal`, `rounded`, `thick`, `double`, `block`, `outerHalfBlock`, `innerHalfBlock`). |
-| `borderColor` | Focused border foreground. Hex literal only (`#RRGGBB`). |
+#### Inline `chromaStyle`
 
-### 3. Own the style in Go
+Keys are snake_case chroma token names: `name_function`,
+`literal_string`, `generic_deleted`, `background`, `keyword`, etc.
+The parser converts the snake_case key to chroma's PascalCase
+identifier and calls `chroma.TokenTypeString`; unknown keys are
+rejected at registry init with the offending key in the error.
 
-When a named upstream style is not enough, build a `theme.Theme` and set
-`Palette.Chroma`, `Palette.Glamour` / `Palette.GlamourFor`,
-`Palette.Prompt`, or `Palette.Huh`.
+Values accept either form:
 
-Resolve order:
+- A raw chroma `StyleEntry` string (`"bold #E05454"`, `"bg:#1F1A16"`,
+  `"italic #8A7E72"`) for tight one-line entries.
+- A unified `styleSpec` object that may use `$primitive` / `$token`
+  references. The parser converts the resolved `lipgloss.Style` into
+  the equivalent chroma StyleEntry directives.
 
-- Chroma: `Palette.Chroma` → `Palette.ChromaName` → `ChromaFromTokens`
-- Glamour: `Palette.Glamour` → `Palette.GlamourFor` → `Palette.GlamourName` → `GlamourFromTokens`
-- Prompt: `Palette.Huh` → `Palette.Prompt` (plus `Theme.PromptKnobs`) → `PromptFromTokens` (plus `Theme.PromptKnobs`)
+Mutually exclusive with `chroma`.
 
-`Palette.Huh` wins over `Palette.Prompt` and `PromptFromTokens`. Use it
-when the closed `Prompt` surface is not enough.
+#### Inline `glamourStyle`
+
+A **curated** six-field surface that projects onto a full
+[`glamour/v2/ansi.StyleConfig`](https://pkg.go.dev/charm.land/glamour/v2/ansi#StyleConfig).
+Six fields cover the regions themes routinely customize:
+
+| Field        | Projects onto                                                    |
+|--------------|------------------------------------------------------------------|
+| `headings`   | `Heading` plus every per-level `H1`..`H6` (prefixes preserved).  |
+| `code`       | `Code` (inline code spans).                                      |
+| `link`       | `Link` and `LinkText` (URLs share the link styling).             |
+| `blockquote` | `BlockQuote`.                                                    |
+| `emphasis`   | `Emph`.                                                          |
+| `strong`     | `Strong`.                                                        |
+
+The base config is chosen from glamour's defaults by variant key and
+`Capabilities` (`NoTTYStyleConfig` for `notty` or non-interactive,
+`DarkStyleConfig` for dark, `LightStyleConfig` otherwise) so any region
+the manifest does not touch keeps a sensible look. Themes that need
+glamour's full surface (per-language code styles, table cell tints,
+list indentation, etc.) should use the named `glamour` field instead.
+
+Each field is a `styleSpec`; color slots accept hex literals or
+`$primitive` / `$token` references. Mutually exclusive with `glamour`.
+
+#### Inline `promptStyle`
+
+A **flat** Nabat-native block: one entry per prompt slot. The
+framework owns the projection onto huh's struct shape, so manifest
+authors never see fields like `focused.textInput.cursor` or have to
+deal with `$inherit` between focused and blurred.
+
+| Field              | Slot                                                                                                       |
+|--------------------|------------------------------------------------------------------------------------------------------------|
+| `title`            | Group / section title above prompts.                                                                       |
+| `description`      | Help / explanatory text rendered under each prompt.                                                        |
+| `cursor`           | Text-input cursor.                                                                                         |
+| `placeholder`      | Text-input placeholder copy.                                                                               |
+| `selectedOption`   | Currently-selected list item.                                                                              |
+| `unselectedOption` | Items not currently selected.                                                                              |
+| `selectedPrefix`   | Marker drawn next to the selected item (e.g. `"✓ "`).                                                      |
+| `unselectedPrefix` | Marker drawn next to non-selected items (e.g. `"• "`).                                                     |
+| `error`            | Error indicators and messages.                                                                             |
+| `help`             | Keybind footer text.                                                                                       |
+| `selector`         | Active-row indicator and navigation arrows (next / prev).                                                  |
+| `buttonFocused`    | Focused submit / next button.                                                                              |
+| `buttonBlurred`    | Inactive button.                                                                                           |
+| `border`           | Form / card border preset (`hidden`, `normal`, `rounded`, `thick`, `double`, `block`, `outerHalfBlock`, `innerHalfBlock`). |
+
+Each style field is a `styleSpec`; color slots accept hex literals or
+`$primitive` / `$token` references. Mutually exclusive with `prompt`.
+
+When a theme needs huh's full per-state surface (separate focused /
+blurred styling, custom textInput layout, etc.), drop into the
+programmatic path with a `huh.Theme` of your own and set
+`Palette.Huh` directly.
 
 ## JSON Schema
 
-The schema lives in two places that should agree:
+The schema lives in two places that must agree:
 
 - **In-repo source of truth:** [`theme/schema/v1.json`](../theme/schema/v1.json).
   Embedded into the binary via `//go:embed`; exposed through
@@ -481,8 +513,7 @@ The schema lives in two places that should agree:
   same bytes, served from the project's website. Manifests reference
   this URL in the `$schema` field; editors fetch it for validation.
 
-Repository tests keep the embedded schema, its public `$id`, and bundled
-manifests internally consistent.
+Drift between the two is impossible to commit by accident:
 
 - `TestSchemaIDMatchesPublicURL` pins the `$id` field inside the
   document to the public URL constant. Renaming either the file or
@@ -490,9 +521,6 @@ manifests internally consistent.
 - `TestManifestsMatchSchema` validates every embedded manifest
   against the embedded schema. A schema change that breaks an
   existing manifest fails the build.
-
-Publishing the same schema bytes at the public URL is a release/hosting
-responsibility and is not verified by these unit tests.
 
 ## Schema Hosting
 
@@ -537,17 +565,15 @@ Go file, no registry call, no `init()` hook to wire.
    manifest exists.
 3. Run `go test ./theme/...`. The drift test confirms every constant
    has a matching manifest, `TestManifestsMatchSchema` validates the
-   new file against the schema, `TestManifestNamesMatchRegistryKeys`
-   confirms each manifest `name` equals its registry key, and
-   `TestEveryThemeResolves` confirms every built-in theme resolves
-   across a representative set of Dark/Interactive capability
-   combinations.
+   new file against the schema, and `TestEveryThemeResolves` confirms
+   the theme produces a usable `theme.ResolvedTheme` across every
+   `Capabilities` permutation.
 
 If the styling you want cannot be expressed as a manifest (for example
 a `huh.Theme` closure that varies on `Capabilities`), implement the
-`theme.Resolver` interface from your application and pass it to
+`theme.Recipe` interface from your application and pass it to
 `nabat.WithCustomTheme(...)` instead. That path keeps a programmatic
-resolver out of the built-in catalog without requiring a registration
+recipe out of the built-in catalog without requiring a registration
 API.
 
 The schema can be exercised against hand-written manifests using
@@ -558,39 +584,25 @@ compiler. See `theme/catalog_test.go` for the canonical pattern.
 ## Capabilities
 
 `theme.Capabilities` is the snapshot of terminal facts the framework
-detects once at `App.finalize` time and passes to theme resolution:
+detects once at `App.finalize` time and passes to `Theme.Resolve`:
 
 ```go
 type Capabilities struct {
     Dark           bool                 // dark terminal background
     BackgroundHex  string               // exact background color when detectable
     Profile        colorprofile.Profile // active color profile of stdout
-    Interactive    bool                 // primary output stream is a TTY
+    Interactive    bool                 // primary stream is a TTY
     Width          int                  // terminal width in cells; 0 when unknown
     Hyperlinks     bool                 // OSC 8 supported
     Unicode        UnicodeLevel         // ASCII / Wide / Emoji
-    ReducedMotion  bool                 // reduced-motion preference was detected
+    ReducedMotion  bool                 // suppress animations
 }
 ```
 
-`Interactive` reports whether the primary output stream is a TTY for theme
-resolution (`io.IsStdoutTTY()`). Despite the field name, this capability is
-not the same as prompt availability. Prompts use `nabat.CanPrompt`: stdin
-and stderr must both be TTYs.
-
-`Theme.pickVariant` uses `Interactive` to prefer a `notty` variant when
-primary output is not a TTY. `Profile` is not part of that variant-selection
-algorithm; color depth is adapted separately.
-
-`ReducedMotion` is detected from environment signals and exposed to theme
-resolution. Spinner and Status do not currently consume it to disable
-animation.
-
 Detection happens in the `nabat` root package using the same
 `colorprofile` and `xterm` libraries the IOStreams bundle relies on,
-plus environment-variable heuristics (`TERM_PROGRAM`, `LANG`,
-`NABAT_REDUCED_MOTION`, `REDUCE_MOTION`, `NO_MOTION`, and similar).
-Defaults are conservative: when in doubt, the framework reports
+plus environment-variable heuristics (`TERM_PROGRAM`, `LANG`, `NO_MOTION`,
+etc.). Defaults are conservative: when in doubt, the framework reports
 the safer (less-feature) value.
 
 The leaf `nabat.dev/theme` package has no IO dependency, so tests can
@@ -610,27 +622,17 @@ Extensions opt in by implementing the optional sub-interface:
 ```go
 func (e *Extension) ThemeRequires() theme.Requirement {
     return theme.Require("logging extension",
-        theme.StatusInfo, theme.StatusWarning, theme.StatusError,
-        theme.AccentPrimary, theme.TextPrimary,
+        theme.StatusInfo, theme.StatusWarn, theme.StatusError,
+        theme.TextLabel, theme.TextValue,
     )
 }
 ```
 
-The first-party `logging` package implements this for its default themed
-handler. `logging.WithHandler` installs a custom `slog.Handler` that does
-not read the resolved theme, so that configuration returns an empty
-requirement (no tokens).
-
 The framework's own consumers are declared in `theme.CoreRequirements()`;
-adding a new core consumer (a new `Status*`, `Text*`, `Table*`,
-`Spinner*`, etc.) means adding to the right `Requirement` there so the
-missing-token diagnostic stays accurate.
+adding a new core consumer (a new `Status*`, `Text*`, `Table*`, etc.)
+means adding to the right `Requirement` there so the missing-token
+diagnostic stays accurate.
 
-A theme can satisfy a required token either by declaring it or by
-reaching it through the alias chain. Built-in Minimal is in that first
-group: it declares the primary semantic tokens, and component tokens
-such as `spinner.active` fall through aliases.
-
-Authors who intentionally ship an incomplete custom theme may leave
-strict mode off and accept the missing-token diagnostic. CIs and tests
-that want the regression catch flip `nabat.WithStrictThemeRequirements()`.
+Authors who intentionally ship a sparse theme (the `minimal` theme,
+for example) leave strict mode off and ignore the warning; CIs and
+tests that want the regression catch flip the option.

@@ -56,18 +56,3 @@ func NewIO(in io.Reader, out, errOut io.Writer) *IOStreams {
 		termio.WithColorPolicy(colorprofile.Detect(out, env)),
 	)
 }
-
-// CanPrompt reports whether Nabat may present an interactive prompt on io.
-// Prompts read stdin and render on stderr, so both must be terminals.
-// Stdout TTY state is not part of this check: piped command product does
-// not disable prompting when the human interaction channel is still a TTY.
-//
-// [IOStreams.IsInteractive] is termio's stdin-and-stdout check. It is not
-// Nabat's prompt policy, and it is not theme.Capabilities.Interactive
-// (stdout TTY used for theme resolution).
-func CanPrompt(io *IOStreams) bool {
-	if io == nil {
-		return false
-	}
-	return io.IsStdinTTY() && io.IsStderrTTY()
-}

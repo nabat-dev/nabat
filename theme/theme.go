@@ -288,9 +288,8 @@ func (t Theme) resolveWithErr(c Capabilities) (ResolvedTheme, error) {
 
 // pickVariant selects the variant [Theme.Resolve] applies, in order:
 // the lone key when only one variant exists; [VariantNoTTY] when
-// [Capabilities.Interactive] is false and a notty variant exists;
-// [VariantDark] or [VariantLight] from [Capabilities.Dark]; else
-// [Theme.Default]. [Capabilities.Profile] is not consulted here.
+// non-interactive; [VariantDark] or [VariantLight] from
+// [Capabilities.Dark]; else [Theme.Default].
 func (t Theme) pickVariant(c Capabilities) Variant {
 	if len(t.Variants) == 1 {
 		for v := range t.Variants {

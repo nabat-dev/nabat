@@ -18,8 +18,7 @@
 // A [Theme] carries one or more [Palette] entries, a default variant,
 // and cross-variant defaults. [Theme.Resolve] picks a variant from
 // [Capabilities] and returns an immutable [ResolvedTheme] queried by
-// [Token] or accessor. [Theme.Resolve] discards resolution errors;
-// callers that need diagnostics should use [Theme.ResolveErr].
+// [Token] or accessor.
 //
 // The package does not depend on the nabat root package or IOStreams;
 // extensions can import it to read styles without pulling in command

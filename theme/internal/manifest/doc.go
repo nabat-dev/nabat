@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package manifest turns a Nabat-specific JSON theme manifest into a
+// Package manifest turns a Nabat theme manifest (DTCG JSON) into a
 // [*Compiled] intermediate value.
 //
 // The [nabat.dev/theme] catalog assembles a Theme from [*Compiled]. This

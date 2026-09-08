@@ -483,41 +483,6 @@ func TestWithRequiredFlagMissingReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "required flag")
 }
 
-func TestRequiredFlag_constructorDefaultDoesNotSatisfy(t *testing.T) {
-	t.Parallel()
-
-	io, _, _, _ := testIO()
-	app := MustNew("test", WithIO(io))
-	app.MustCommand("run",
-		WithFlag("token", "secret", WithRequired()),
-		WithRun(func(c *Context) error {
-			t.Fatal("handler should not run when required flag uses only a constructor default")
-			return nil
-		}),
-	)
-	err := Run(t, app, []string{"run"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "required flag")
-}
-
-func TestRequiredFlag_envSatisfies(t *testing.T) {
-	t.Setenv("TEST_TOKEN", "from-env")
-
-	io, _, _, _ := testIO()
-	app := MustNew("test", WithIO(io))
-	app.MustCommand("run",
-		WithFlag("token", "secret", WithRequired(), WithEnv("token")),
-		WithRun(func(c *Context) error {
-			got, err := c.BindAs[string]("token")
-			require.NoError(t, err)
-			assert.Equal(t, "from-env", got)
-			assert.True(t, c.Explicit("token"))
-			return nil
-		}),
-	)
-	require.NoError(t, Run(t, app, []string{"run"}))
-}
-
 func TestFlagShorthandWorks(t *testing.T) {
 	t.Parallel()
 

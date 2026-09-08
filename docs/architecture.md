@@ -25,9 +25,9 @@ core's public extension API.
 
 | Package                     | Role                                                                                |
 |-----------------------------|-------------------------------------------------------------------------------------|
-| `nabat.dev/nabat`           | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Resolver` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
+| `nabat.dev`                 | Core: `App`, `Command`, `Context`, `Extension`, `IOStreams`, **built-in help, version, and shell completion**, output, prompts, value types. Resolves a `theme.Recipe` (typically a `theme.Theme` value) into the `theme.ResolvedTheme` returned by `App.Theme()`. |
 | `nabat.dev/nabat/nabattest` | Test helpers nested under core (analogous to `net/http/httptest`): `NewIO`, `NewTTYIO`, `Run`, `RunParallel`. Not imported by production code. |
-| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Resolver`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded Nabat theme manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, ...), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev/nabat`. |
+| `nabat.dev/theme`           | Leaf primitives + built-in catalog: `Theme` (data), `Palette`, `Recipe`, `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Prompt`, `Override`, `Requirement` plus embedded DTCG JSON manifests, lazy `Get` / `Names` / `All` / `Schema` / `Manifest` registry, untyped name constants (`theme.Default`, `theme.Dracula`, ...), and the closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
 | `nabat.dev/manpage`         | `man` subcommand (roff/man-page generation)                                         |
 | `nabat.dev/logging`         | Styled `*slog.Logger` install with --verbose / --log-level flag wiring; derives its level / key=value styles from `theme.ResolvedTheme` via `logging.FromTheme`. |
 
@@ -53,9 +53,8 @@ Consequences:
 
 Theme, help, version, and completion stay in core on purpose. Theme is on
 every output path through `App.Theme()`; the catalog and parser live in
-`nabat.dev/theme` (parser under `theme/internal/manifest`). `nabat.New`
-resolves the installed theme against detected `Capabilities` and pins it for
-the App lifetime.
+`nabat.dev/theme` (parser under `theme/internal/manifest`). `App.New` resolves
+the recipe against detected `Capabilities` and pins it for the App lifetime.
 Help and version need root flags (`--help`, `--version`), which extensions
 cannot add. Completion stays in core because Cobra's completion code is already
 linked, the completer hooks hang off flags and args the core owns, and shell
@@ -70,16 +69,16 @@ it.
 ```text
 ┌──────────────────────────────────────────────────────────┐
 │           Extensions (subpackages, opt-in)                │
-│  manpage, logging                                         │
+│  completion, manpage, logging                             │
 │  Each: Option type + New(opts...) nabat.Extension         │
-│  (help, version, and completion are built into core)      │
+│  (help and version are built into core, not subpackages)  │
 ├──────────────────────────────────────────────────────────┤
 │                   Output & Interaction                    │
-│  Semantic status (Success, Warn, Error, Info)             │
-│  Command product (Print, Table, List, Tree, JSON, YAML,   │
-│    TOML, Encode, Highlight, Markdown)                     │
-│  Live status (Spinner, Status, ProgressBar)               │
-│  Interactive prompts (Confirm, Form, Input)               │
+│  Semantic (Success, Warn, Error, Info, Print)             │
+│  Structured (Table, List, Tree, JSON, YAML, TOML,        │
+│    Encode, Highlight)                                     │
+│  Progress (ProgressBar)                                   │
+│  Interactive (Spinner, Confirm, Form)                     │
 │  Custom help rendering (markdown via Glamour)             │
 ├──────────────────────────────────────────────────────────┤
 │                Config, Command & Resolution               │
@@ -98,7 +97,7 @@ it.
 │  Glamour (markdown rendering)                             │
 │  Huh (interactive prompts and forms)                      │
 │  Chroma (syntax highlighting)                             │
-│  colorprofile (color capability/policy)                   │
+│  colorprofile (TTY detection)                             │
 │  x/term (terminal checks)                                 │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -126,6 +125,7 @@ flowchart LR
         envPrefixAcc[EnvPrefix]
     end
     subgraph extensions [Extensions]
+        completion
         manpage
         logging
         thirdParty[third-party]
@@ -149,22 +149,22 @@ Extensions install subcommands (via `App.Command`), register global hooks (via
 | `App`          | Root CLI application. Holds the Cobra root command, the `*commandSpec` map, and config. Entry point for `Command`, `MustCommand`, `Run`. |
 | `Extension`    | `interface { fmt.Stringer; Init(AppSurface) error }`: the single extension point. Extensions are installed via the `WithExtension(ext)` Option passed to `New(...)` and run in declaration order inside `New`. `String()` identifies the extension in error messages. |
 | `Command`      | One subcommand. Wraps a Cobra command with Nabat metadata (positional args, flags, run function). Supports nesting via `Command()` (returns `(*Command, error)`) or `MustCommand()` (panics on failure). |
-| `Context`      | Per-invocation runtime passed to `RunFunc`. Holds Go context, resolved values, raw args, interactive state, and every output/prompt method. Output goes through `IOStreams.Out` (stdout) and `IOStreams.ErrOut` (stderr), each with independent sticky-error state. `Logger()` reads from the App's installed logger or returns a discard logger. |
+| `Context`      | Per-invocation runtime passed to `RunFunc`. Holds Go context, resolved values, raw args, interactive state, the shared sticky-error writer, and every output/prompt method. `Logger()` reads from the App's installed logger or returns a discard logger. |
 | `config`       | Private app config. Holds name, env prefix, theme, IO writers, the optional installed logger, the root command's `commandSpec` (`rootSpec`), pending declarative subcommand registrations (`pendingCommands`), and the optional error handler. Validated at construction. |
 | `commandSpec`  | Private command spec. Single struct combining description, long description, example, aliases, group, hidden/deprecated markers, run function, flags, args, hooks, passthrough definition, parent pointer, parse and arity options, completion config, and pending child registrations from nested `WithCommand` calls. |
 | `fieldConfig`  | Private field config shared by positional args and flags. Holds default, short, env-prefixed names (`envPrefixed`), env literal aliases (`envLiteral`), usage, required, and persistent (inherited) marker. |
 | `argSpec` / `flagSpec` | Private build-time specs each option mutates. `argSpec` wraps `fieldConfig` plus `promptConfig`; `flagSpec` wraps only `fieldConfig`. Plain `func(*spec)` options edit them directly. |
 | `ValueType`    | Type descriptor for args and flags. Identifies the kind (string, bool, int, float, select, etc.) and optional choice constraints. Each kind exposes a `valueAdapter` so flag registration / parsing is generic. |
-| `theme.Theme`  | Declarative theme data: `Name`, `Default Variant`, `Variants map[Variant]Palette`, plus cross-variant defaults. Constructed inline (struct literal) or via `nabat.WithTheme(name)` (resolved through the catalog). `Theme.Resolve(Capabilities)` produces a `ResolvedTheme` and discards resolution errors; `Theme.ResolveErr` returns those errors. Implements `theme.Resolver`. |
-| `theme.Resolver` | `interface { Resolve(Capabilities) ResolvedTheme }`. Escape hatch for themes whose palette choice depends on runtime capabilities in a way one Palette per Variant cannot express. `theme.Theme` satisfies it; bespoke resolvers implement it directly. `App.finalize` calls `ResolveErr` for a concrete `theme.Theme` and `Resolve` for other resolvers. |
+| `theme.Theme`  | Declarative theme data: `Name`, `Default Variant`, `Variants map[Variant]Palette`, plus cross-variant defaults. Constructed inline (struct literal) or via `nabat.WithTheme(name)` (resolved through the catalog). `Theme.Resolve(Capabilities)` produces a `ResolvedTheme`. Implements `theme.Recipe`. |
+| `theme.Recipe` | `interface { Resolve(Capabilities) ResolvedTheme }`. Escape hatch for themes whose palette choice depends on runtime capabilities in a way one Palette per Variant cannot express. `theme.Theme` satisfies it; bespoke recipes implement it directly. |
 | `theme.Palette` | Per-variant style data: `Tokens`, `Aliases`, `Chroma`/`ChromaName`, `Glamour`/`GlamourName`/`GlamourFor`, `Prompt`, `Huh`. Each cascade slot (chroma, glamour, prompt) collapses at `Theme.Resolve` time. |
-| `theme.ResolvedTheme` | Immutable, capability-aware result of `Theme.Resolve`. Consumers query it through `Style(token)` (with alias-chain fall-through), plus single-value accessors for `Chroma`, `Glamour`, `Huh`, `ListEnumerator`, `TableBorder`. Returned by `App.Theme()`. Thread-safe; never mutated after `nabat.New` returns. |
-| `theme.Capabilities`  | Snapshot of terminal facts the framework detects once at `App.finalize` time: `Dark`, `BackgroundHex`, `Profile`, `Interactive`, `Width`, `Hyperlinks`, `Unicode`, `ReducedMotion`. Resolvers branch on these to pick palettes that work on the terminal at hand. `Interactive` is primary-output TTY state (`IsStdoutTTY`), not prompt availability. |
+| `theme.ResolvedTheme` | Immutable, capability-aware result of `Theme.Resolve`. Consumers query it through `Style(token)` (with alias-chain fall-through), plus single-value accessors for `Chroma`, `Glamour`, `Huh`, `ListEnumerator`, `TableBorder`. Returned by `App.Theme()`. Thread-safe; never mutated after `App.New` returns. |
+| `theme.Capabilities`  | Snapshot of terminal facts the framework detects once at `App.finalize` time: `Dark`, `BackgroundHex`, `Profile`, `Interactive`, `Width`, `Hyperlinks`, `Unicode`, `ReducedMotion`. Recipes branch on these to pick palettes that work on the terminal at hand. |
 | `theme.Override`     | Per-Palette mutation produced by `theme.SetToken`/`SetAlias`/`SetChroma*`/`SetGlamour*`/`SetHuh`. Applied to every variant of the underlying theme via `Theme.With(...)` or `nabat.WithThemeOverride(...)` for one-line tweaks of a built-in theme. |
 | `theme.Requirement`  | Token set declared by a consumer (core or extension via `ExtensionWithRequirements`). The framework cross-checks against the resolved theme at `App.finalize` and surfaces missing tokens (warn-by-default; hard error via `nabat.WithStrictThemeRequirements`). |
 | `ConfigErrors` | Aggregated validation errors from config validation and declarative registration via `WithCommand`. Collects multiple issues into one error value, returned from `New`. |
 
-**Bundled theme manifests (`theme/data/*.json`).** Every colored variant shares the same **`tokens` key set** as `theme/data/default.json` for its variant kind (`dark`, `light`, or `notty`). `TestBundledManifestTokenKeysMatchDefault` in `theme/manifest_token_keys_test.go` enforces that vocabulary. Brand colors for the built-in `nabat` theme are intended to track `nabat-dev/palette`; this repository does not currently verify hex parity against a Palette checkout.
+**Bundled theme manifests (`theme/data/*.json`).** Brand colors for the built-in `nabat` theme track the canonical palette package (`palette/palette/nabat-dark.json` and `nabat-light.json`): each manifest primitive hex matches the palette `colors` entry with the same name. The manifest-only **`link` primitive** resolves through palette **`roles.link`** (same hex as the named garden swatch). **`text.link`** always references that dedicated primitive, not `status.info`, so hyperlink color is explicit in diffs. Every colored variant shares the same **`tokens` key set** as `theme/data/default.json` for its variant kind (`dark`, `light`, or `notty`); `TestBundledManifestTokenKeysMatchDefault` in `theme/manifest_token_keys_test.go` enforces key parity. Cross-repo verification runs when **`NABAT_PALETTE_ROOT`** points at a palette repository root (`TestNabatManifestHexMatchesPalette` in `theme/nabat_palette_parity_test.go`).
 
 All five option families (`Option`, `RootOption`, `CommandOption`,
 `ArgOption`, and `FlagOption`) are Go interfaces, so one value can satisfy
@@ -199,7 +199,7 @@ surface.
 App
 ├── config (private, set via Option)
 │   ├── name, envPrefix
-│   ├── theme (theme.Resolver: the resolver set by WithTheme / WithCustomTheme; concrete is usually theme.Theme)
+│   ├── theme (theme.Recipe: the recipe set by WithTheme / WithCustomTheme; concrete is usually theme.Theme)
 │   ├── themeOverrides ([]theme.Override: registered via WithThemeOverride / WithThemeOverrides)
 │   ├── strictThemeRequirements (bool: promote requirement diagnostics to hard errors)
 │   ├── resolvedTheme (theme.ResolvedTheme: populated once by config.finalize)
@@ -241,18 +241,15 @@ Context (created per invocation)
 ├── passthroughArgs ([]string: args after "--"; nil when "--" absent)
 ├── values (map[string]any: resolved args + flags)
 ├── set (map[string]bool: true when value came from arg/env/prompt, not a default)
-└── interactive (bool: CanPrompt(IO) at construction time: stdin and stderr are both TTYs)
+└── interactive (bool: IO.CanPrompt() at construction time)
 
 IOStreams
 ├── In (io.Reader: raw input)
 ├── Out (io.Writer: colorprofile-wrapped stdout, preserves Fd())
 ├── ErrOut (io.Writer: colorprofile-wrapped stderr, preserves Fd())
 ├── Methods: IsStdinTTY/IsStdoutTTY/IsStderrTTY, SetXxxTTY (overrides for tests),
-│            IsInteractive (termio: stdin and stdout TTY; not Nabat prompt policy),
-│            TerminalWidth, TerminalHeight, Err (joins Out and ErrOut sticky errors),
-│            RawIn/RawOut/RawErrOut
-└── Constructors: NewSystemIO() (os.Stdin/Stdout/Stderr), NewIO(in,out,err); nabattest.NewIO()
-    Prompt policy: nabat.CanPrompt(io) and Context.CanPrompt() require stdin and stderr TTY
+│            ColorEnabled, CanPrompt, TerminalWidth, Err (sticky), RawIn/RawOut/RawErrOut
+└── Constructors: NewSystemIO() (os.Stdin/Stdout/Stderr), NewIO(in,out,err); nabattest.NewIO() returning bundle + 3 buffers
 ```
 
 ## Execution Lifecycle
@@ -262,19 +259,21 @@ When `App.Run(ctx)` is called, execution follows this sequence:
 ```text
 App.Run(ctx)
 │
-├── 1. Cobra executes (root.ExecuteContextC)
-│       Parses os.Args (or args from RunArgs), matches a command, parses flags
-│       Command RunE was wired at construction (attachRunE)
+├── 1. Re-attach RunE for all commands
+│       Ensures globalPreRun hooks registered by extensions during Extend() are wired in
 │
-└── 2. Nabat's RunE pipeline (per matched command)
+├── 2. Cobra executes (root.ExecuteContextC)
+│       Parses os.Args (or args from RunArgs), matches a command, parses flags
+│
+└── 3. Nabat's RunE pipeline (per matched command)
         │
-        ├── a. Build Context (newContext) in root PersistentPreRunE
-        │       Detect prompt capability (CanPrompt: stdin and stderr both TTY)
+        ├── a. Build Context (newContext)
+        │       Detect interactivity (TTY check on stdin + stdout)
         │       Resolve positional args (see Arg Resolution Flow below)
         │       Resolve flags including persistent flags from ancestors
+        │       Create sticky-error writer for output
         │
         ├── b. Global preRun hooks (App.OnPreRun)
-        │       Includes hooks registered by extensions during Extension.Init
         │       Run each func(*Context) error in registration order
         │       If any returns ErrHandled → short-circuit with nil (success)
         │       Stop on first non-ErrHandled error
@@ -314,7 +313,7 @@ For each arg defined on the command, Nabat tries sources in order:
          │ no
 2. Environment var →  `WithEnv` set and env var set and non-empty?  →  parse and use
          │ no
-3. Interactive prompt →  CanPrompt (stdin and stderr TTY) and a prompt is attached?  →  prompt user
+3. Interactive prompt →  TTY and a WithXxxPrompt is attached?  →  prompt user
          │ no
 4. Required check  →  `WithRequired()` set?            →  return error
          │ no
@@ -323,9 +322,8 @@ For each arg defined on the command, Nabat tries sources in order:
 6. Skip            →  value stays absent from context
 ```
 
-The constructor `defaultVal` is the non-prompt fallback for declarative
-args. `WithRequired` rejects that default: a required arg must come from
-CLI, env, or a prompt.
+The constructor `defaultVal` is the only non-interactive fallback for
+declarative args.
 
 Environment resolution is **opt-in** per field and split into two explicit
 options:
@@ -351,9 +349,9 @@ Flags follow a simpler cascade:
          │ no
 2. Environment →  `WithEnv` set and env var set and non-empty? →  parse and use
          │ no
-3. Required    →  WithRequired() was set? →  return error
+3. Default     →  constructor `defaultVal` on `WithFlag` / `WithSelectFlag` / ...  →  use default
          │ no
-4. Default     →  constructor `defaultVal` on `WithFlag` / `WithSelectFlag` / ...  →  use default
+4. Required    →  WithRequired() was set? →  return error
          │ no
 5. Skip        →  value stays absent from context
 ```
@@ -361,71 +359,30 @@ Flags follow a simpler cascade:
 > [!NOTE]
 > Flags do not support interactive prompts. This is enforced at compile time:
 > `FlagOption` cannot take prompt-shaping options (those exist only as
-> `ArgOption`). `WithRequired` on a flag also ignores the constructor
-> default: the value must come from the CLI or the environment.
+> `ArgOption`).
 
 `Context` implements `context.Context`, so handlers can use `c` directly for
 cancellation, timeouts, and value propagation.
 
 ## Output System
 
-`Context` uses separate stdout and stderr paths. `IOStreams.Out` and
-`IOStreams.ErrOut` are independent `termio.Writer` values, each with its own
-sticky-error state. A write error on stdout does not poison stderr, and a write
-error on stderr does not poison stdout. `IOStreams.Err()` joins whatever errors
-the two streams have latched.
+`Context` has three output paths. They share one sticky-error, color-aware
+writer per invocation:
 
-Static output helpers generally write through `IOStreams.Out` or
-`IOStreams.ErrOut` and inherit that stream's sticky-error and color-policy
-behavior. Nabat's internal `writer` wrapper is constructed per call around
-one of those streams for helpers such as `Print`, `Success`, `Table`, and
-`JSON`. It is not a single per-Context writer.
-
-Live terminal renderers may use the raw stderr stream directly and report
-failures through their own return path:
-
-- Spinner TTY animation writes to `RawErrOut()`
-- Status Bubble Tea rendering writes to `RawErrOut()`
-- Huh prompts and forms write to `RawErrOut()`
-- ProgressBar owns a writer over the bar's lifetime rather than wrapping
-  every update in a fresh helper
-
-Command product (stdout):
-
-- `Print` / `Println` / `Printf`
-- `Table` / `List` / `Tree`
-- `JSON` / `YAML` / `TOML`
-- `Encode` / `Highlight` / `Markdown`
-
-Human status, progress, and interaction (stderr):
-
-- `Success` / `Warn` / `Error` / `Info`
-- `Spinner` / `Status` / `ProgressBar`
-- Huh prompts and forms (`Confirm`, `Form`, `Input`, and related APIs)
-
-Diagnostic logging: `Context.Logger()` returns the installed `*slog.Logger`.
-Install one with `nabat.WithLogger` or `nabat.WithExtension(logging.New(...))`.
-The first-party logging extension's default handler writes to
-`IOStreams.ErrOut`. Otherwise you get a discard logger.
+- **Semantic output**: styled symbols and a message (`Success`, `Warn`,
+  `Error`, `Info`, print helpers), with optional key-value pairs.
+- **Structured output**: tables, lists, trees, JSON / YAML / TOML, encoding,
+  highlighting, progress bars.
+- **Diagnostic logging**: `Context.Logger()` returns a `*slog.Logger`. Install
+  one with `nabat.WithLogger` or `nabat.WithExtension(logging.New(...))`
+  (themed logger, optional `--verbose` / `--log-level`). Otherwise you get a
+  discard logger.
 
 ### Terminal awareness
 
-TTY state and color policy are separate dimensions.
-
-TTY state (stdin, stdout, and stderr, tracked independently) controls
-terminal-specific behavior such as live rewriting and animation. Prompting
-requires `CanPrompt` (stdin and stderr both TTY), which is more than "a
-stream is a TTY". Piped stdout does not disable prompts when stderr is
-still a TTY. Spinner, Status, and ProgressBar key off stderr TTY, not
-prompt capability. `theme.Capabilities.Interactive` remains stdout TTY
-state for theme resolution and is not this prompt check.
-
-Color is governed by detected color capability and user color policy
-(`NO_COLOR`, `CLICOLOR`, `CLICOLOR_FORCE`, `TERM=dumb`). `NewSystemIO` /
-`NewIO` currently detect that policy from stdout and pass the same policy
-object to both `Out` and `ErrOut`. Stream TTY flags stay independent of
-that shared policy. A TTY may have color suppressed. Forced color may
-remain on non-TTY output. These signals are not equivalent.
+TTY gets color. Pipes get the `NoTTY` profile (escape codes stripped). Semantic
+output, structured output, and progress bars share the writer, so the first I/O
+error sticks for the whole `Context`.
 
 ## Command Tree
 

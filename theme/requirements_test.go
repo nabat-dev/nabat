@@ -151,9 +151,9 @@ func TestCheckRequirementsAllSatisfied(t *testing.T) {
 // TestCoreRequirementsCoversWellKnownTokens guards the rule that the
 // framework's own consumers declare every well-known token. Drift
 // here means a new core consumer (a new Status*, Text*, Table*,
-// List*, Tree*, Spinner*, or StatusActive) was added to the framework
-// but not to CoreRequirements, and its missing-token diagnostic would
-// silently stop catching regressions.
+// List*, Tree*) was added to the framework but not to
+// CoreRequirements — and its missing-token diagnostic would silently
+// stop catching regressions.
 func TestCoreRequirementsCoversWellKnownTokens(t *testing.T) {
 	t.Parallel()
 
@@ -170,7 +170,6 @@ func TestCoreRequirementsCoversWellKnownTokens(t *testing.T) {
 		theme.TableBorder, theme.TableHeader, theme.TableCell,
 		theme.ListItem, theme.ListEnumerator,
 		theme.TreeItem, theme.TreeEnumerator,
-		theme.SpinnerActive, theme.StatusActive,
 	} {
 		assert.Truef(t, covered[want], "well-known token %s missing from CoreRequirements()", want)
 	}

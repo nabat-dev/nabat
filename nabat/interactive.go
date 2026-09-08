@@ -71,7 +71,7 @@ func (a *App) applyHuhThemeForAdHocPrompt(form *huh.Form) {
 	}))
 }
 
-// Input asks for one string value when [Context.CanPrompt] is true.
+// Input asks for one string value when [Context.IsInteractive] is true.
 // Non-interactive use without [WithDefault] fails. Bad options yield
 // [*ConfigErrors]; the prompt layer may also fail.
 func (c *Context) Input(prompt string, opts ...FieldOption[string]) (string, error) {

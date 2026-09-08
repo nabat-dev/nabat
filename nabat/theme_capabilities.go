@@ -30,7 +30,7 @@ import (
 // detectCapabilities builds a [theme.Capabilities] snapshot from an
 // [IOStreams] bundle and the pre-detected color profile. It lives in nabat
 // because it depends on [IOStreams]; theme tests construct Capabilities
-// directly. A nil io yields a default-dark, no-color, non-TTY
+// directly. A nil io yields a default-dark, no-color, non-interactive
 // snapshot. Unmeasurable facts (Width, BackgroundHex, Hyperlinks) report
 // the safer, less-featured value.
 func detectCapabilities(io *IOStreams, profile colorprofile.Profile) theme.Capabilities {
@@ -161,11 +161,9 @@ func detectUnicodeFromEnv() theme.UnicodeLevel {
 	return theme.UnicodeWide
 }
 
-// detectReducedMotionFromEnv reports a detected reduced-motion preference
-// from NABAT_REDUCED_MOTION, REDUCE_MOTION, and NO_MOTION. Truthy values
-// enable it; "0" / "false" / "no" / "off" keep it off. The result is stored
-// on [theme.Capabilities.ReducedMotion]. Spinner and Status do not currently
-// consume it to disable animation.
+// detectReducedMotionFromEnv reports whether animations should be
+// suppressed. Checks NABAT_REDUCED_MOTION, REDUCE_MOTION, and NO_MOTION;
+// truthy values enable it, while "0" / "false" / "no" / "off" keep it off.
 func detectReducedMotionFromEnv() bool {
 	for _, key := range []string{"NABAT_REDUCED_MOTION", "REDUCE_MOTION", "NO_MOTION"} {
 		v := strings.TrimSpace(os.Getenv(key))

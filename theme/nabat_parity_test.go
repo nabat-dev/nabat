@@ -27,10 +27,11 @@ import (
 	"nabat.dev/theme"
 )
 
-// TestNabatChromaParityFromManifest exercises chroma derived from the
-// nabat theme's semantic tokens via [theme.ChromaFromTokens]. Each
-// entry is the chroma TokenType / hex / modifier the derived style
-// must keep; if token mapping drifts, the test fails immediately.
+// TestNabatChromaParityFromManifest exercises the nabat theme after its
+// chroma styling moved out of chroma_style_nabat.go into the manifest.
+// Each entry is the same chroma TokenType / hex / modifier that the
+// deleted Go file declared; if the manifest drifts from those values
+// the test fails immediately.
 func TestNabatChromaParityFromManifest(t *testing.T) {
 	t.Parallel()
 
@@ -40,7 +41,7 @@ func TestNabatChromaParityFromManifest(t *testing.T) {
 	require.NoError(t, err)
 
 	chromaStyle := rt.Chroma()
-	require.NotNil(t, chromaStyle, "nabat theme must derive a chroma style from tokens")
+	require.NotNil(t, chromaStyle, "nabat manifest must produce an owned chroma style after PR5")
 
 	want := map[chroma.TokenType]struct {
 		fg   string
@@ -64,10 +65,12 @@ func TestNabatChromaParityFromManifest(t *testing.T) {
 	}
 }
 
-// TestNabatPromptParityFromManifest verifies that the nabat theme's
-// token-derived prompt style and promptKnobs land on the resolved
-// huh.Theme with the expected per-slot colors. The check runs against
-// the slots Prompt.Huh actually populates.
+// TestNabatPromptParityFromManifest verifies that the nabat manifest's
+// promptStyle block lands on the resolved huh.Theme with the expected
+// per-slot colors. Phase 8 collapsed the old huh-shaped manifest tree
+// into the framework-owned [theme.Prompt] struct, so the parity check
+// runs against the slots Prompt.Huh actually populates — not the
+// hierarchical focused/blurred surface the legacy manifest used.
 //
 // The Blurred mirror is verified separately so anyone removing the
 // "blurred = focused" mirror in Prompt.Huh sees the regression.
@@ -80,7 +83,7 @@ func TestNabatPromptParityFromManifest(t *testing.T) {
 	require.NoError(t, err)
 
 	huhTheme := rt.Huh()
-	require.NotNil(t, huhTheme, "nabat theme must derive a huh theme from tokens and promptKnobs")
+	require.NotNil(t, huhTheme, "nabat manifest must produce a huh theme after P8")
 	s := huhTheme.Theme(true)
 
 	cases := []struct {

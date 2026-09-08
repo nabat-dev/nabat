@@ -57,6 +57,8 @@ Nabat deliberately separates brand intent, color data, semantic styling, and eng
 | API and engineering philosophy | [`docs/design-principles.md`](docs/design-principles.md) |
 | Package architecture | [`docs/architecture.md`](docs/architecture.md) |
 
+This table identifies ownership. It does not mean this document audits every referenced file, and it does not require those files to be rewritten when this contract is introduced.
+
 `theme/token.go` is authoritative for current token names. Theme authoring documentation explains that vocabulary. If a guide disagrees with the implementation, the implementation wins until the guide is updated.
 
 ### 2.1 No Duplicate Color Authority
@@ -265,7 +267,9 @@ non-TTY
 interactive TTY
 ```
 
-TTY state determines whether live rewriting and animation are possible. stdin, stdout, and stderr TTY state are tracked independently. Prompting requires stdin and stderr to both be TTYs (`CanPrompt`). Stdout TTY state is a separate fact used for theme resolution (`theme.Capabilities.Interactive`), not for prompt availability.
+TTY state determines whether live rewriting and animation are possible. stdin, stdout, and stderr TTY state are tracked independently.
+
+Prompting requires an interactive terminal, which is more than "a stream is a TTY". The exact stdin/stdout/stderr combination is an implementation decision and is not specified here.
 
 Color capability / policy:
 
@@ -293,7 +297,7 @@ These inputs are related. They do not mean the same thing.
 Nabat degrades each capability on its own:
 
 - animation and live rewriting depend on TTY capability;
-- prompting depends on stdin and stderr TTY capability;
+- prompting depends on interactivity;
 - color depends on color capability and color policy;
 - semantic meaning must survive when any of these capabilities are absent.
 
@@ -1051,7 +1055,7 @@ They are a prompt presentation choice rather than a universal requirement for ev
 
 ### 20.5 Non-Interactive Behavior
 
-Prompt presentation applies only when stdin and stderr are both terminals.
+Prompt presentation applies only when the command is interactive.
 
 When interaction is unavailable, each prompt API follows its documented fallback, default, bypass, or error behavior. A command must never depend on an interactive prompt as its only automation path.
 
@@ -1650,6 +1654,14 @@ Examples may include:
 - generated CSS token naming.
 
 Such guidance must not be presented as an existing API or implementation feature.
+
+This document also leaves some implementation questions open. They are design-adjacent, but they are not decided here:
+
+- the exact stream combination that enables prompts;
+- whether constructor defaults satisfy `WithRequired`;
+- per-stream color policy for human-facing stderr UI;
+- theme-requirement coverage for first-party extensions;
+- whether detected reduced-motion preference should suppress animation.
 
 When a proposed design becomes implemented and stable, this document should be updated to remove the distinction.
 

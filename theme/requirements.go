@@ -35,7 +35,6 @@ type Requirement struct {
 //
 //	return theme.Require("logging extension",
 //	    theme.StatusInfo, theme.StatusWarning, theme.StatusError,
-//	    theme.AccentPrimary, theme.TextPrimary,
 //	)
 func Require(consumer string, tokens ...Token) Requirement {
 	return Requirement{Consumer: consumer, Tokens: tokens}
@@ -68,10 +67,6 @@ func CoreRequirements() []Requirement {
 				ListItem, ListEnumerator,
 				TreeItem, TreeEnumerator,
 			},
-		},
-		{
-			Consumer: "core live status",
-			Tokens:   []Token{SpinnerActive, StatusActive},
 		},
 	}
 }

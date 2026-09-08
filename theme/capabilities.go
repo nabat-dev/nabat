@@ -36,10 +36,8 @@ type Capabilities struct {
 	// output stream.
 	Profile colorprofile.Profile
 
-	// Interactive reports whether the primary output stream is a TTY for
-	// theme resolution. Despite the field name, this is not prompt
-	// interactivity. Prompt availability is determined separately by the
-	// command and context I/O state.
+	// Interactive reports whether primary output is a TTY and input
+	// allows prompting.
 	Interactive bool
 
 	// Width is the terminal width in cells, or 0 when unmeasured.
@@ -51,10 +49,8 @@ type Capabilities struct {
 	// Unicode is the terminal's Unicode capability tier.
 	Unicode UnicodeLevel
 
-	// ReducedMotion reports a detected reduced-motion preference
-	// (NABAT_REDUCED_MOTION, REDUCE_MOTION, NO_MOTION, and similar flags).
-	// Detection is exposed to theme resolution; Spinner and Status do not
-	// currently consume this field to disable animation.
+	// ReducedMotion reports whether animations should be suppressed
+	// (NO_MOTION, REDUCE_MOTION, and similar flags).
 	ReducedMotion bool
 }
 

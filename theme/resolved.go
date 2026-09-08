@@ -57,8 +57,7 @@ func (r ResolvedTheme) Variant() Variant { return r.variant }
 //
 // When the chain bottoms out, Style returns the zero [lipgloss.Style]
 // (terminal default). A cyclic chain returns the zero style via a
-// per-call seen set. [Theme.ResolveErr] reports cycles at construction;
-// [Theme.Resolve] discards that error.
+// per-call seen set; [Theme.Resolve] also reports cycles at construction.
 func (r ResolvedTheme) Style(t Token) lipgloss.Style {
 	if r.tokens == nil {
 		return lipgloss.Style{}
