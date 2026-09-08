@@ -23,7 +23,7 @@ styles attach.
 
 ## System Overview
 
-Theming lives in one package. That package does not import `nabat.dev`:
+Theming lives in one package. That package does not import `nabat.dev/nabat`:
 
 ```text
 nabat ──► nabat/theme  (leaf + catalog)
@@ -32,8 +32,8 @@ nabat ──► nabat/theme  (leaf + catalog)
 
 | Package        | Role                                                                                                       |
 |----------------|------------------------------------------------------------------------------------------------------------|
-| `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Resolver` interface; embedded JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev`. |
-| `nabat.dev`    | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Resolver)` accepts any `Resolver` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities` and pins a `theme.ResolvedTheme` for the lifetime of the app. For a concrete `theme.Theme`, finalize uses `Theme.ResolveErr`; other resolvers have only `Resolve`. `App.Theme()` returns the pinned result. |
+| `nabat.dev/theme` | **Leaf primitives + built-in catalog.** `Theme` (data), `Token`, `Capabilities`, `Variant`, `ResolvedTheme`, `Palette`, `Prompt`, `Resolver` interface; embedded JSON manifests under `data/`, JSON Schema under `schema/`, lazy registry (`Get` / `Names` / `All` / `Schema` / `Manifest`), untyped string constants for every shipped name, and a closed catalog of bundled upstream `huh.Theme` wrappers (`charm`, `base16`, `dracula`, `catppuccin`). No imports from `nabat.dev/nabat`. |
+| `nabat.dev/nabat` | **Wiring.** `nabat.WithTheme(name)` looks up the registry, `nabat.WithCustomTheme(theme.Resolver)` accepts any `Resolver` value (including a plain `theme.Theme`). `App.finalize` detects `Capabilities` and pins a `theme.ResolvedTheme` for the lifetime of the app. For a concrete `theme.Theme`, finalize uses `Theme.ResolveErr`; other resolvers have only `Resolve`. `App.Theme()` returns the pinned result. |
 
 `theme.Theme` is data, not a function. It holds one `Palette` per variant, a
 default variant when capabilities do not pin one, and a few cross-variant
@@ -50,7 +50,7 @@ Pass the theme name to `nabat.WithTheme`:
 
 ```go
 import (
-    "nabat.dev"
+    "nabat.dev/nabat"
     "nabat.dev/theme"
 )
 
@@ -98,7 +98,7 @@ build a `theme.Theme` struct and install it with `nabat.WithCustomTheme`:
 import (
     "charm.land/lipgloss/v2"
 
-    "nabat.dev"
+    "nabat.dev/nabat"
     "nabat.dev/theme"
 )
 
@@ -537,9 +537,11 @@ Go file, no registry call, no `init()` hook to wire.
    manifest exists.
 3. Run `go test ./theme/...`. The drift test confirms every constant
    has a matching manifest, `TestManifestsMatchSchema` validates the
-   new file against the schema, and `TestEveryThemeResolves` confirms
-   the theme produces a usable `theme.ResolvedTheme` across every
-   `Capabilities` permutation.
+   new file against the schema, `TestManifestNamesMatchRegistryKeys`
+   confirms each manifest `name` equals its registry key, and
+   `TestEveryThemeResolves` confirms every built-in theme resolves
+   across a representative set of Dark/Interactive capability
+   combinations.
 
 If the styling you want cannot be expressed as a manifest (for example
 a `huh.Theme` closure that varies on `Capabilities`), implement the
@@ -615,10 +617,15 @@ func (e *Extension) ThemeRequires() theme.Requirement {
 ```
 
 The framework's own consumers are declared in `theme.CoreRequirements()`;
-adding a new core consumer (a new `Status*`, `Text*`, `Table*`, etc.)
-means adding to the right `Requirement` there so the missing-token
-diagnostic stays accurate.
+adding a new core consumer (a new `Status*`, `Text*`, `Table*`,
+`Spinner*`, etc.) means adding to the right `Requirement` there so the
+missing-token diagnostic stays accurate.
 
-Authors who intentionally ship a sparse theme (the `minimal` theme,
-for example) leave strict mode off and ignore the warning; CIs and
-tests that want the regression catch flip the option.
+A theme can satisfy a required token either by declaring it or by
+reaching it through the alias chain. Built-in Minimal is in that first
+group: it declares the primary semantic tokens, and component tokens
+such as `spinner.active` fall through aliases.
+
+Authors who intentionally ship an incomplete custom theme may leave
+strict mode off and accept the missing-token diagnostic. CIs and tests
+that want the regression catch flip `nabat.WithStrictThemeRequirements()`.

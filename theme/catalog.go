@@ -203,7 +203,8 @@ func Schema() []byte {
 // [Manifest] returns a fresh value each call; mutating slices in place
 // is safe and does not affect the registry.
 type Metadata struct {
-	// Name is the manifest "name" field and [Get] registry key.
+	// Name is the manifest "name" field. For built-in themes it equals
+	// the [Get] registry key (the filename without .json).
 	Name string
 
 	// Description is the manifest "description" field, or empty.

@@ -30,7 +30,7 @@ import (
 // detectCapabilities builds a [theme.Capabilities] snapshot from an
 // [IOStreams] bundle and the pre-detected color profile. It lives in nabat
 // because it depends on [IOStreams]; theme tests construct Capabilities
-// directly. A nil io yields a default-dark, no-color, non-interactive
+// directly. A nil io yields a default-dark, no-color, non-TTY
 // snapshot. Unmeasurable facts (Width, BackgroundHex, Hyperlinks) report
 // the safer, less-featured value.
 func detectCapabilities(io *IOStreams, profile colorprofile.Profile) theme.Capabilities {

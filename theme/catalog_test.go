@@ -167,11 +167,33 @@ func TestConstsHaveManifests(t *testing.T) {
 	}
 }
 
+// TestManifestNamesMatchRegistryKeys verifies that every built-in
+// manifest's "name" field equals its registry key (the filename
+// without .json). The catalog keys off the filename; this test keeps
+// the documented name/filename invariant from drifting.
+func TestManifestNamesMatchRegistryKeys(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range theme.Names() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			meta, err := theme.Manifest(name)
+			require.NoError(t, err)
+			assert.Equal(t, name, meta.Name,
+				"manifest name field must equal registry key %q", name)
+
+			th, err := theme.Get(name)
+			require.NoError(t, err)
+			assert.Equal(t, name, th.Name,
+				"Theme.Name must equal registry key %q", name)
+		})
+	}
+}
+
 // TestEveryThemeResolves applies each registered theme against a
-// representative set of [theme.Capabilities] and verifies it produces
-// a usable [theme.ResolvedTheme] without errors. This catches regressions
-// in the manifest loader (unknown chroma name, broken huh adapter
-// reference, primitive miss) for every theme in the catalog at once.
+// representative Dark/Interactive [theme.Capabilities] matrix and
+// verifies it produces a usable [theme.ResolvedTheme] without errors.
 func TestEveryThemeResolves(t *testing.T) {
 	t.Parallel()
 
@@ -284,9 +306,10 @@ func TestGetReturnsDefensiveCopyForNestedMaps(t *testing.T) {
 }
 
 // TestDefaultThemeResolvesAcrossAllCapabilities verifies that default.json
-// resolves to a usable [theme.ResolvedTheme] without errors across every
-// Capabilities permutation. The dark/light/notty variants collectively cover
-// all four combinations so pickVariant always finds a declared variant.
+// resolves to a usable [theme.ResolvedTheme] across the Dark/Interactive
+// combinations pickVariant consults. The dark/light/notty variants
+// collectively cover those four combinations so pickVariant always finds
+// a declared variant.
 func TestDefaultThemeResolvesAcrossAllCapabilities(t *testing.T) {
 	t.Parallel()
 

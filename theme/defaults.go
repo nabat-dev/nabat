@@ -30,7 +30,7 @@ func HuhFromTokens(tokens map[Token]lipgloss.Style) huh.Theme {
 // GlamourPreset picks the upstream glamour style name for v and c.
 // [Theme.Resolve] uses it when glamour slots are empty.
 //
-//   - [VariantNoTTY] or non-interactive -> "notty"
+//   - [VariantNoTTY] or primary output is not a TTY -> "notty"
 //   - [Capabilities.Dark] -> "dark"
 //   - otherwise -> "light"
 func GlamourPreset(v Variant, c Capabilities) string {

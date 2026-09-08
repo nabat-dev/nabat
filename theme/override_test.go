@@ -26,7 +26,7 @@ import (
 
 // TestThemeWithPreservesPrompt is a regression test for a clonePalette
 // bug where Palette.Prompt was silently dropped during Theme.With(),
-// causing themes with a custom promptStyle to fall back to the
+// causing themes with a custom Palette.Prompt to fall back to the
 // token-derived default after any override.
 func TestThemeWithPreservesPrompt(t *testing.T) {
 	t.Parallel()

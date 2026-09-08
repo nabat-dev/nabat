@@ -235,7 +235,7 @@ func TestResolveAppliesGlamourPresetWhenAllNil(t *testing.T) {
 		wantNil bool
 	}{
 		{"notty variant always picks notty", theme.VariantNoTTY, theme.Capabilities{Dark: true, Interactive: true}, false},
-		{"non-interactive picks notty", theme.VariantDark, theme.Capabilities{Dark: true}, false},
+		{"primary output not a TTY picks notty", theme.VariantDark, theme.Capabilities{Dark: true}, false},
 		{"interactive dark picks dark", theme.VariantDark, theme.Capabilities{Dark: true, Interactive: true}, false},
 		{"interactive light picks light", theme.VariantLight, theme.Capabilities{Interactive: true}, false},
 	}
