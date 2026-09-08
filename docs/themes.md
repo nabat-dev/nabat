@@ -102,9 +102,9 @@ acme := theme.Theme{
     Variants: map[theme.Variant]theme.Palette{
         theme.VariantDark: {
             Tokens: map[theme.Token]lipgloss.Style{
-                theme.StatusError: lipgloss.NewStyle().Foreground(lipgloss.Color("#E05454")).Bold(true),
-                theme.TextLabel:   lipgloss.NewStyle().Foreground(lipgloss.Color("#C89B3C")).Bold(true),
-                theme.TextValue:   lipgloss.NewStyle().Foreground(lipgloss.Color("#EDE4D3")),
+                theme.StatusError:   lipgloss.NewStyle().Foreground(lipgloss.Color("#E05454")).Bold(true),
+                theme.TextPrimary:   lipgloss.NewStyle().Foreground(lipgloss.Color("#EDE4D3")),
+                theme.TextSecondary: lipgloss.NewStyle().Foreground(lipgloss.Color("#D5CDC2")),
             },
             Chroma:  acmeChroma,        // owned *chroma.Style
             Glamour: acmeGlamourCfg,    // owned *ansi.StyleConfig
@@ -158,7 +158,7 @@ app, _ := nabat.New("myctl",
     nabat.WithTheme(theme.Dracula),
     nabat.WithThemeOverrides(
         theme.SetToken(theme.StatusError, magenta),
-        theme.SetAlias(theme.ListItem, theme.TextBody),
+        theme.SetAlias(theme.ListItem, theme.TextSecondary),
         theme.SetChromaName("monokai"),
     ),
 )
@@ -275,22 +275,26 @@ the zero `lipgloss.Style` (terminal default).
 
 | Token              | Consumer                                                                                                      |
 |--------------------|---------------------------------------------------------------------------------------------------------------|
-| `status.success`   | `Context.Success` (the leading symbol and the success message text).                                          |
-| `status.warn`      | `Context.Warn`.                                                                                               |
-| `status.error`     | `Context.Error`, the `error:` prefix on uncaught errors.                                                      |
-| `status.info`      | `Context.Info`, version-line text, spinner styling.                                                           |
-| `text.label`       | Left side of `key=value` output, structured-output headers, help section titles.                              |
-| `text.value`       | Right side of `key=value`, table cell values.                                                                 |
-| `text.title`       | Help titles and other prominent section titles.                                                               |
-| `text.body`        | Help body copy and other multi-line prose.                                                                    |
+| `status.success`   | Leading symbol on `Context.Success`.                                                                          |
+| `status.warning`   | Leading symbol on `Context.Warn`.                                                                             |
+| `status.error`     | Leading symbol on `Context.Error`, and the `error:` prefix on uncaught errors.                                |
+| `status.info`      | Leading symbol on `Context.Info`; spinner title.                                                              |
+| `status.active`    | Active row state on `Context.Status`. *Default-aliased to `status.info`.*                                     |
+| `text.primary`     | Primary body text; default for table/list/tree item text; status metadata values.                             |
+| `text.secondary`   | Descriptive text, help body, and other prose.                                                                 |
+| `text.title`       | Help titles, table headers, and other prominent section titles.                                               |
+| `text.link`        | Hyperlinks.                                                                                                   |
 | `text.muted`       | De-emphasized chrome (overridable by `table.border`, `list.enumerator`, `tree.enumerator` for finer control). |
+| `accent.primary`   | Labels, key chrome, help section headings, status metadata keys.                                              |
+| `code.surface`     | Code-oriented surfaces.                                                                                       |
 | `table.border`     | Characters drawn between table cells. *Default-aliased to `text.muted`.*                                      |
 | `table.header`     | Cells in a table's header row. *Default-aliased to `text.title`.*                                             |
-| `table.cell`       | Cells in a table's data rows. *Default-aliased to `text.value`.*                                              |
-| `list.item`        | List item text. *Default-aliased to `text.value`.*                                                            |
+| `table.cell`       | Cells in a table's data rows. *Default-aliased to `text.primary`.*                                            |
+| `list.item`        | List item text. *Default-aliased to `text.primary`.*                                                          |
 | `list.enumerator`  | List enumerator markers. *Default-aliased to `text.muted`.*                                                   |
-| `tree.item`        | Tree item text. *Default-aliased to `text.value`.*                                                            |
+| `tree.item`        | Tree item text. *Default-aliased to `text.primary`.*                                                          |
 | `tree.enumerator`  | Tree enumerator markers. *Default-aliased via `list.enumerator` to `text.muted`.*                             |
+| `spinner.active`   | Live spinner icon. *Default-aliased to `status.info`.*                                                        |
 
 The full set of constants lives in
 [`theme/token.go`](../theme/token.go); add new ones there as the core
@@ -308,18 +312,20 @@ chain:
 list.enumerator -> text.muted
 tree.enumerator -> list.enumerator -> text.muted
 table.border    -> text.muted
-table.cell      -> text.value
+table.cell      -> text.primary
 table.header    -> text.title
-list.item       -> text.value
-tree.item       -> text.value
+list.item       -> text.primary
+tree.item       -> text.primary
+spinner.active  -> status.info
+status.active   -> status.info
 ```
 
 Any manifest can override a step with the per-variant `aliases` field:
 
 ```jsonc
 "aliases": {
-    "tree.item": "text.body",
-    "list.item": "text.body"
+    "tree.item": "text.secondary",
+    "list.item": "text.secondary"
 }
 ```
 
@@ -622,8 +628,7 @@ Extensions opt in by implementing the optional sub-interface:
 ```go
 func (e *Extension) ThemeRequires() theme.Requirement {
     return theme.Require("logging extension",
-        theme.StatusInfo, theme.StatusWarn, theme.StatusError,
-        theme.TextLabel, theme.TextValue,
+        theme.StatusInfo, theme.StatusWarning, theme.StatusError,
     )
 }
 ```

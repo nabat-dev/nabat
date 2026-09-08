@@ -2,7 +2,7 @@
 
 # Nabat
 
-*From Persian نبات "rock candy"; /næˈbɑːt/ (nah-BAHT).*
+*From Persian نبات "rock candy"; Iranian Persian [næ.bɒ́ːt], English approximation nah-BAHT.*
 
 **Adaptive CLI framework for Go.**
 Typed args, structured output, and themes on top of Cobra.

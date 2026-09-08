@@ -29,11 +29,15 @@ It answers questions such as:
 - What visual ideas make Nabat recognizable?
 - How should semantic CLI output behave?
 - How should colors be used without coupling components to raw color values?
-- How should terminal behavior degrade in pipes, CI, and `NO_COLOR` environments?
+- How should terminal behavior degrade in pipes, CI, and restricted color-policy environments?
 - How should the future website visually relate to the CLI framework?
 - Where does each design decision belong?
 
-It does **not** duplicate implementation documentation or machine-readable palette data.
+It does not replace exhaustive API or implementation documentation.
+
+Where this document describes current component behavior, it defines the user-facing design contract. Implementation details that do not affect that contract remain documented in code and technical documentation.
+
+It also does not duplicate machine-readable palette data.
 
 ---
 
@@ -41,17 +45,19 @@ It does **not** duplicate implementation documentation or machine-readable palet
 
 Nabat deliberately separates brand intent, color data, semantic styling, and engineering architecture.
 
-| Concern | Canonical source |
+| Concern | Authoritative source |
 | --- | --- |
 | Brand identity and visual language | This `DESIGN.md` |
-| Terminal UX design rules | This `DESIGN.md` |
-| Raw colors, names, RGB/hex values, variants, ANSI mappings | [`nabat-dev/palette`](https://github.com/nabat-dev/palette) |
-| Nabat semantic theme tokens | [`theme/token.go`](theme/token.go) |
-| Theme aliases and fallbacks | [`theme/aliases.go`](theme/aliases.go) |
-| Theme manifests and runtime theme behavior | [`theme/`](theme/) |
-| Theme authoring and manifest documentation | [`docs/themes.md`](docs/themes.md) |
-| API and engineering design principles | [`docs/design-principles.md`](docs/design-principles.md) |
-| Package and implementation architecture | [`docs/architecture.md`](docs/architecture.md) |
+| Terminal UX design contract | This `DESIGN.md` |
+| Raw palette values and ANSI mappings | [`nabat-dev/palette`](https://github.com/nabat-dev/palette) |
+| Semantic token names | [`theme/token.go`](theme/token.go) |
+| Token aliases and fallbacks | [`theme/aliases.go`](theme/aliases.go) |
+| Runtime theme model and manifest implementation | [`theme/`](theme/) |
+| Theme authoring guide | [`docs/themes.md`](docs/themes.md) |
+| API and engineering philosophy | [`docs/design-principles.md`](docs/design-principles.md) |
+| Package architecture | [`docs/architecture.md`](docs/architecture.md) |
+
+`theme/token.go` is authoritative for current token names. Theme authoring documentation explains that vocabulary. If a guide disagrees with the implementation, the implementation wins until the guide is updated.
 
 ### 2.1 No Duplicate Color Authority
 
@@ -85,7 +91,11 @@ The product name is **Nabat**.
 
 Pronunciation:
 
-`/næˈbɑːt/` — approximately **nah-BAHT**
+Iranian Persian (formal): `[næ.bɒ́ːt]`
+
+English approximation: **nah-BAHT**
+
+The English form is an approximation. It is not Persian IPA.
 
 Origin:
 
@@ -245,15 +255,49 @@ A user should be able to pipe command output into another program without status
 
 Every important result must remain understandable without color or animation.
 
-The rendering hierarchy is:
+Nabat treats interaction and color as independent capabilities.
+
+Interaction capability:
 
 ```text
-plain / piped / CI / NO_COLOR
-             ↓
-          styled TTY
-             ↓
-       interactive TTY
+non-TTY
+   ↓
+  TTY
+   ↓
+interactive TTY
 ```
+
+TTY state determines whether live rewriting and animation are possible. stdin, stdout, and stderr TTY state are tracked independently. Prompting requires an interactive terminal, which is more than "a stream is a TTY".
+
+Color capability / policy:
+
+```text
+no color
+   ↓
+  ANSI
+   ↓
+ANSI 256
+   ↓
+true color
+```
+
+Color policy is the set of inputs that decide whether color is used and at what depth. Nabat accounts for terminal color capability and supported color-control conventions, including:
+
+- `NO_COLOR`
+- `CLICOLOR`
+- `CLICOLOR_FORCE`
+- `TERM=dumb`
+
+These inputs are related. They do not mean the same thing.
+
+`NO_COLOR` suppresses color. It does not by itself make a terminal non-interactive, and it does not disable useful non-color terminal behavior.
+
+Nabat degrades each capability on its own:
+
+- animation and live rewriting depend on TTY capability;
+- prompting depends on interactivity;
+- color depends on color capability and color policy;
+- semantic meaning must survive when any of these capabilities are absent.
 
 Color and interactivity enhance the experience. They must not be required to understand it.
 
@@ -288,8 +332,7 @@ Design decisions should account for:
 - pipes;
 - CI logs;
 - Unicode availability;
-- `NO_COLOR`;
-- `TERM=dumb`;
+- color policy;
 - non-interactive environments.
 
 The website may extend the visual language, but it should not redefine the CLI.
@@ -444,6 +487,8 @@ This allows themes to replace appearance without changing component meaning.
 Nabat's well-known semantic tokens are defined by `theme.Token`.
 
 Token names describe **roles**, not colors.
+
+These constants define Nabat's well-known token vocabulary, not a closed enum. Custom themes and integrations may introduce additional token names.
 
 ### 8.1 Status
 
@@ -728,7 +773,7 @@ Website badge components may use richer surfaces, but they should preserve the s
 
 ### 14.1 Default Structure
 
-The default table uses a normal single-line Unicode border.
+Unless the resolved theme overrides the table border, Nabat falls back to a normal single-line Unicode border.
 
 Other supported border shapes may be selected explicitly, including:
 
@@ -740,7 +785,7 @@ Other supported border shapes may be selected explicitly, including:
 - Markdown;
 - hidden.
 
-Rounded borders are a supported style, not the universal default.
+Rounded, ASCII, thick, double, block, Markdown, and hidden borders are optional styles rather than universal defaults.
 
 ### 14.2 Semantic Styling
 
@@ -837,7 +882,7 @@ On non-TTY output:
 
 ### 17.2 Delayed Animation
 
-The default spinner intentionally waits briefly before opening an animated interface.
+The default spinner waits 200ms before opening an animated interface.
 
 Fast operations therefore produce a static completion line rather than flashing a spinner for a fraction of a second.
 
@@ -865,10 +910,12 @@ Conceptually:
     OBJECT      REASON       AGE
  ✓  api          ready        4s
  !  worker       retrying     2s
- ⠋  database     migrating    1s
+    ⠋  database     migrating    1s
 ```
 
-### 18.1 Interactive TTY
+AGE is included by default unless the caller disables elapsed time.
+
+### 18.1 TTY
 
 On a TTY, Status may:
 
@@ -881,7 +928,7 @@ On a TTY, Status may:
 
 ### 18.2 Non-TTY
 
-In non-interactive environments:
+On non-TTY output:
 
 - animation disappears;
 - the title is plain text;
@@ -984,6 +1031,12 @@ Rounded prompt borders fit the Nabat visual language and may be used by the bran
 
 They are a prompt presentation choice rather than a universal requirement for every Nabat output component.
 
+### 19.5 Non-Interactive Behavior
+
+Prompt presentation applies only when the command is interactive.
+
+When interaction is unavailable, each prompt API follows its documented fallback, default, bypass, or error behavior. A command must never depend on an interactive prompt as its only automation path.
+
 ---
 
 ## 20. Help Output
@@ -999,8 +1052,11 @@ command title       → text.title
 section heading     → accent.primary
 body / descriptions → text.secondary
 muted metadata      → text.muted
-warnings            → status.warning
 ```
+
+`status.warning` is used for some warning-oriented annotations, such as flag deprecation notes.
+
+Not every string that contains "Deprecated" uses that token. Treat help styling as a stable hierarchy of roles, not a global map from words to tokens.
 
 For usage expressions:
 
@@ -1291,6 +1347,8 @@ interaction.disabled
 
 Those semantic roles should resolve to Nabat Palette values.
 
+A role name does not by itself prove a foreground/background pair meets the contrast targets in [Accessibility](#25-accessibility).
+
 Components should consume semantic variables rather than raw palette names.
 
 For example:
@@ -1354,15 +1412,24 @@ A user viewing:
 
 - redirected output;
 - CI logs;
-- `NO_COLOR`;
-- `TERM=dumb`;
+- a restricted color policy;
 - a limited terminal;
 
 must still receive meaningful output.
 
 ### 25.3 Contrast
 
-Palette ports and website mappings should validate appropriate foreground/background contrast for their target environment.
+For Nabat-controlled web and documentation surfaces, target [WCAG 2.2](https://www.w3.org/TR/WCAG22/) Level AA:
+
+- normal text: minimum 4.5:1;
+- large text: minimum 3:1;
+- meaningful non-text UI indicators and components: minimum 3:1 against adjacent colors where the WCAG criterion applies.
+
+Palette role names express intent. They do not imply that a color is suitable for arbitrary foreground/background combinations.
+
+If a canonical Palette value does not satisfy the contrast requirement for a specific Nabat-controlled web role, the consumer must use another suitable canonical Palette value or change the Palette at its source of truth.
+
+Consumers must not invent ad-hoc replacement colors locally.
 
 Dark and light variants may use different color values specifically to preserve semantic identity while maintaining readability.
 
@@ -1432,7 +1499,7 @@ Specify what the component looks like:
 
 - without ANSI;
 - outside a TTY;
-- under `NO_COLOR`;
+- under a restricted color policy;
 - in logs.
 
 ### Step 5 — Define Stream Ownership
@@ -1618,7 +1685,7 @@ The complete Nabat design architecture can be viewed as:
 
 The essential rule is:
 
-> **Palette defines color. Tokens define meaning. Components consume meaning. The terminal environment determines presentation.**
+> **Palette defines color. Tokens define meaning. Components consume meaning. TTY capability, interactivity, and color policy independently determine presentation.**
 
 ---
 
